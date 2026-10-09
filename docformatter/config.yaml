@@ -1,5 +1,5 @@
 name: DocFormatter
-version: "0.4.0"
+version: "0.5.0"
 slug: docformatter
 description: Mise en forme et vérification orthographique des comptes rendus médicaux (.docx), sans IA
 url: https://github.com/florianfish/CRFormatter
@@ -21,8 +21,14 @@ map:
     read_only: false
 options:
   dossier_surveille: false
+  acces_direct: false
+  utilisateurs: []
 schema:
   dossier_surveille: bool
+  acces_direct: bool
+  utilisateurs:
+    - nom: str
+      mot_de_passe: password
 # Image publiée par la GitHub Action (le tag correspond à « version »).
 # Commenter cette ligne pour que le Supervisor construise l'image localement à partir du Dockerfile.
 image: ghcr.io/florianfish/docformatter-{arch}

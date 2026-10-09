@@ -64,8 +64,11 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
 
 ## Sécurité (Ingress)
 
-- En production, seules les requêtes venant de `172.30.32.2` (proxy Ingress du Supervisor) sont
-  acceptées. L'utilisateur vient de l'en-tête `X-Remote-User-Name` (historique, propriété
+- Deux entrées. **Ingress** : requêtes venant de `172.30.32.2` (proxy du Supervisor), déjà
+  authentifiées par HA. **Accès direct** (option `acces_direct`, ex. nginx sur un sous-domaine) :
+  connexion obligatoire (`auth.py` : cookie signé HMAC dépendant du mot de passe, blocage après
+  5 échecs par `X-Real-IP`) ; les en-têtes Ingress envoyés par le client y sont ignorés. Toute
+  autre requête est refusée. L'utilisateur vient de l'en-tête `X-Remote-User-Name` (historique, propriété
   des documents en mémoire) ; il n'y a pas de rôles, l'authentification est celle de HA. Garder `proxy_headers=False` dans uvicorn, sinon l'IP peut être usurpée.
 - `DOCFORMATTER_DEV=1` désactive l'authentification. Ce mode est réservé au développement local.
 - Côté JS, insérer le texte via `el()` / `textContent`. `innerHTML` n'est utilisé que pour du HTML

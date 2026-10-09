@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titre %}Connexion · DocFormatter{% endblock %}
+{% block contenu %}
+<form class="carte connexion" method="post" action="connexion">
+  <h1>Connexion</h1>
+  {% if erreur %}<p class="message erreur" role="alert">{{ erreur }}</p>{% endif %}
+  <input type="hidden" name="suite" value="{{ suite }}">
+  <label>Identifiant
+    <input type="text" name="identifiant" value="{{ identifiant or '' }}" autocomplete="username" autocapitalize="none" required {% if not identifiant %}autofocus{% endif %}>
+  </label>
+  <label>Mot de passe
+    <input type="password" name="mot_de_passe" autocomplete="current-password" required {% if identifiant %}autofocus{% endif %}>
+  </label>
+  <button type="submit" class="principal">Se connecter</button>
+</form>
+{% endblock %}

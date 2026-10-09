@@ -2,3 +2,11 @@ configuration:
   dossier_surveille:
     name: Watched folder
     description: Automatically format .docx files dropped in /share/docformatter/entree into /share/docformatter/sortie.
+  acces_direct:
+    name: Direct access
+    description: >-
+      Allow access without going through Home Assistant (subdomain via the nginx proxy, port 8099). Users below must then log in.
+  utilisateurs:
+    name: Users
+    description: >-
+      Accounts for direct access. Passwords must be at least 10 characters long.

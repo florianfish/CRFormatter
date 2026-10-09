@@ -1,3 +1,8 @@
+## 0.5.0
+
+- Accès direct facultatif sans passer par Home Assistant (ex. sous-domaine via nginx, port 8099),
+  protégé par une page de connexion (options `acces_direct` et `utilisateurs`).
+
 ## 0.4.0
 
 - Éditeur de retouche : modifier le document après les corrections automatiques (texte, titres,

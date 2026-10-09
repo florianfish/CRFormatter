@@ -18,4 +18,5 @@ services:
       - ./docformatter/app:/opt/docformatter/app
       - ./docformatter/defaults:/opt/docformatter/defaults:ro
       - ./dev-data/config:/config
+      - ./dev-data/data:/data
       - ./dev-data/share:/share/docformatter

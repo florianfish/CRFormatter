@@ -40,6 +40,8 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
 | Option | Description |
 | --- | --- |
 | `dossier_surveille` | Active le traitement automatique de `/share/docformatter/entree` → `/share/docformatter/sortie`. |
+| `acces_direct` | Autorise l'accès sans passer par Home Assistant (voir « Accès direct par un sous-domaine »). |
+| `utilisateurs` | Identifiants et mots de passe (10 caractères minimum) pour l'accès direct. |
 
 ## Fichiers et sécurité des règles
 
@@ -91,6 +93,49 @@ Avec nginx, pensez aussi à autoriser des envois de fichiers suffisamment gros d
 ```nginx
 client_max_body_size 25m;
 ```
+
+## Accès direct par un sous-domaine (proxy nginx)
+
+Pour ouvrir l'outil sur sa propre adresse (ex. `https://cr.mondomaine.fr`) sans passer par
+l'interface Home Assistant :
+
+1. Dans la configuration de l'add-on, activer `acces_direct` et créer au moins un utilisateur.
+   Une page de connexion protège alors cet accès ; après 5 échecs, une adresse IP est bloquée
+   15 minutes. La session dure 12 heures. Changer un mot de passe déconnecte ce compte partout.
+2. Dans l'add-on « NGINX Home Assistant SSL proxy » (ou équivalent), pointer vers le port **8099**
+   de l'add-on. Son nom d'hôte est `<id>-docformatter`, où `<id>` est le préfixe visible dans
+   l'URL de la page de l'add-on (ex. `cfbf20f4`) :
+
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name cr.mondomaine.fr;
+
+       ssl_certificate     /ssl/fullchain.pem;
+       ssl_certificate_key /ssl/privkey.pem;
+       ssl_protocols TLSv1.2 TLSv1.3;
+
+       client_max_body_size 25M;
+
+       # DNS interne du Supervisor : l'IP de l'add-on change quand il est recréé
+       resolver 172.30.32.3 valid=30s ipv6=off;
+
+       location / {
+           set $docformatter http://cfbf20f4-docformatter:8099;
+           proxy_pass $docformatter;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+   `X-Real-IP` sert au blocage des tentatives répétées, `X-Forwarded-Proto` à sécuriser le cookie
+   de session (HTTPS uniquement). Inutile d'ouvrir un port dans l'onglet « Réseau » de l'add-on :
+   nginx le joint par le réseau interne de Home Assistant.
+
+L'accès par la barre latérale de Home Assistant continue de fonctionner en parallèle.
 
 ## Confidentialité
 

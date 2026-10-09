@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -25,7 +26,7 @@ def _docx(*paragraphes: str) -> bytes:
 
 @pytest.fixture
 def settings(tmp_path):
-    s = Settings(config_dir=tmp_path / "config", share_dir=tmp_path / "share")
+    s = Settings(config_dir=tmp_path / "config", share_dir=tmp_path / "share", data_dir=tmp_path / "data")
     s.config_dir.mkdir()
     s.dictionnaires_dir.mkdir()
     return s
@@ -270,6 +271,7 @@ def test_options_addon(tmp_path, monkeypatch):
     options.write_text(json.dumps({"dossier_surveille": True}))
     monkeypatch.setenv("DOCFORMATTER_OPTIONS", str(options))
     monkeypatch.setenv("DOCFORMATTER_CONFIG", str(tmp_path / "config"))
+    monkeypatch.setenv("DOCFORMATTER_DATA", str(tmp_path / "data"))
     s = charger_settings()
     assert s.dossier_surveille
 
@@ -391,3 +393,111 @@ def test_retouche_refusee(app):
     assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script", "segments": []}]}).status_code == 422
     assert c.get(f"/lot/{cle}/document/5").status_code == 404
     assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404
+
+
+# ---- Accès direct (proxy nginx) -------------------------------------------------------
+
+NGINX = "172.30.33.5"
+
+
+@pytest.fixture
+def app_directe(settings):
+    settings.acces_direct = True
+    settings.utilisateurs = {"secretaire": "un-mot-de-passe-solide"}
+    return creer_app(settings)
+
+
+def navigateur(app, **en_tetes):
+    c = TestClient(app, client=(NGINX, 50000), follow_redirects=False)
+    c.headers.update({"Accept": "text/html", "X-Real-IP": "203.0.113.7", **en_tetes})
+    return c
+
+
+def se_connecter(c, mot_de_passe="un-mot-de-passe-solide", suite="/"):
+    return c.post("/connexion", data={"identifiant": "Secretaire", "mot_de_passe": mot_de_passe, "suite": suite})
+
+
+def test_acces_direct_desactive_par_defaut(app):
+    assert navigateur(app).get("/").status_code == 403
+
+
+def test_acces_direct_exige_connexion(app_directe):
+    c = navigateur(app_directe)
+    r = c.get("/vocabulaire")
+    assert r.status_code == 303 and r.headers["location"] == "/connexion?suite=/vocabulaire"
+    assert c.get("/api/vocabulaire", headers={"Accept": "application/json"}).status_code == 401
+    assert c.get("/connexion").status_code == 200
+    assert c.get("/static/style.css").status_code == 200
+
+
+def test_connexion_et_deconnexion(app_directe):
+    c = navigateur(app_directe)
+    r = se_connecter(c, suite="/vocabulaire")
+    assert r.status_code == 303 and r.headers["location"] == "/vocabulaire"
+    cookie = r.headers["set-cookie"]
+    assert "HttpOnly" in cookie and "SameSite=lax" in cookie
+    page = c.get("/vocabulaire")
+    assert page.status_code == 200 and "Se déconnecter (secretaire)" in page.text
+    # Les en-têtes Ingress envoyés par le client sont ignorés
+    assert '<base href="/">' in c.get("/", headers={"X-Ingress-Path": "//pirate.example"}).text
+    # L'historique enregistre l'identifiant de connexion
+    c.post("/api/vocabulaire/mot", json={"mot": "apixaban3"})
+    assert "secretaire" in c.get("/historique").text
+
+    c.post("/deconnexion")
+    assert c.get("/vocabulaire").status_code == 303
+
+
+def test_cookie_securise_derriere_https(app_directe):
+    r = se_connecter(navigateur(app_directe, **{"X-Forwarded-Proto": "https"}))
+    assert "Secure" in r.headers["set-cookie"]
+
+
+def test_mauvais_mot_de_passe_et_blocage(app_directe):
+    c = navigateur(app_directe)
+    for _ in range(5):
+        r = se_connecter(c, mot_de_passe="faux")
+        assert r.status_code == 401 and "incorrect" in r.text
+    r = se_connecter(c)  # même le bon mot de passe est refusé pendant le blocage
+    assert r.status_code == 401 and "Trop de tentatives" in r.text
+    # Une autre adresse n'est pas bloquée
+    assert se_connecter(navigateur(app_directe, **{"X-Real-IP": "198.51.100.2"})).status_code == 303
+
+
+def test_session_falsifiee_ou_mot_de_passe_change(app_directe, settings):
+    c = navigateur(app_directe)
+    jeton = se_connecter(c).cookies.get("docformatter_session")
+    assert jeton
+    falsifie = base64.urlsafe_b64encode(b"admin|9999999999|00").decode()
+    c.cookies.set("docformatter_session", falsifie)
+    assert c.get("/vocabulaire").status_code == 303
+
+    # Un changement de mot de passe invalide les sessions existantes
+    settings.utilisateurs = {"secretaire": "nouveau-mot-de-passe-solide"}
+    autre = navigateur(creer_app(settings))
+    autre.cookies.set("docformatter_session", jeton)
+    assert autre.get("/vocabulaire").status_code == 303
+
+
+def test_redirection_externe_refusee(app_directe):
+    r = se_connecter(navigateur(app_directe), suite="//pirate.example/")
+    assert r.headers["location"] == "/"
+
+
+def test_ingress_toujours_possible_en_acces_direct(app_directe):
+    assert client(app_directe).get("/vocabulaire").status_code == 200
+
+
+def test_options_utilisateurs(tmp_path, monkeypatch):
+    from app.settings import charger_settings
+
+    options = tmp_path / "options.json"
+    options.write_text(json.dumps({"acces_direct": True, "utilisateurs": [
+        {"nom": "Secretaire ", "mot_de_passe": "un-mot-de-passe-solide"},
+        {"nom": "court", "mot_de_passe": "trop-court"[:9]},
+    ]}))
+    monkeypatch.setenv("DOCFORMATTER_OPTIONS", str(options))
+    monkeypatch.setenv("DOCFORMATTER_CONFIG", str(tmp_path / "config"))
+    monkeypatch.setenv("DOCFORMATTER_DATA", str(tmp_path / "data"))
+    s = charger_settings()
+    assert s.acces_direct and s.utilisateurs == {"secretaire": "un-mot-de-passe-solide"}

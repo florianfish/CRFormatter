@@ -5,6 +5,7 @@ services:
       - ./docformatter/app:/opt/docformatter/app
       - ./docformatter/defaults:/opt/docformatter/defaults:ro
       - ./dev-data/e2e/config:/config
+      - ./dev-data/e2e/data:/data
       - ./dev-data/e2e/share:/share/docformatter
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/')"]

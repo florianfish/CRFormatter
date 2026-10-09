@@ -31,12 +31,12 @@ install: $(VENV)/.installe
 run: install
 	cd docformatter && \
 	DOCFORMATTER_DEV=1 DOCFORMATTER_RELOAD=1 DOCFORMATTER_PORT=$(PORT) \
-	DOCFORMATTER_CONFIG=$(CURDIR)/dev-data/config DOCFORMATTER_SHARE=$(CURDIR)/dev-data/share \
+	DOCFORMATTER_CONFIG=$(CURDIR)/dev-data/config DOCFORMATTER_SHARE=$(CURDIR)/dev-data/share DOCFORMATTER_DATA=$(CURDIR)/dev-data/data \
 	DOCFORMATTER_SURVEILLE=$(SURVEILLE) DOCFORMATTER_DEV_USER=$(DEV_USER) \
 	$(PY) -m app
 
 docker:
-	mkdir -p dev-data/config dev-data/share
+	mkdir -p dev-data/config dev-data/share dev-data/data
 	DEV_UID=$$(id -u) DEV_GID=$$(id -g) docker compose up --build
 
 docker-down:
@@ -56,7 +56,7 @@ exemple: install
 
 e2e: exemple
 	@$(PY) -c "import playwright" 2>/dev/null || $(VENV)/bin/pip install -q playwright
-	rm -rf dev-data/e2e && mkdir -p dev-data/e2e/config dev-data/e2e/share
+	rm -rf dev-data/e2e && mkdir -p dev-data/e2e/config dev-data/e2e/share dev-data/e2e/data
 	DEV_UID=$$(id -u) DEV_GID=$$(id -g) PORT=8199 DEV_USER=secretaire \
 		docker compose -p docformatter-e2e -f compose.yaml -f compose.e2e.yaml up --build -d --wait
 	$(PY) scripts/parcours_secretaire.py http://127.0.0.1:8199/ dev-data/exemples/exemple.docx dev-data/e2e; \

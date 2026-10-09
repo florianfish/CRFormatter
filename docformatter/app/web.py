@@ -31,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import vocabulaire as voc
 from .apercu import diff_html, rendre_blocs
+from .auth import COOKIE, DUREE_SESSION, Limiteur, Sessions, charger_cle
 from .pipeline import finaliser_retouche, formater, traiter_texte
 from .pipeline.model import Bloc
 from .pipeline.spelling import Correcteur, charger_mots
@@ -152,16 +153,33 @@ def creer_app(settings: Settings) -> FastAPI:
 
     # ---- Sécurité ---------------------------------------------------------------------
 
+    sessions = Sessions(charger_cle(settings.cle_sessions_path), settings.utilisateurs)
+    limiteur = Limiteur()
+
     @app.middleware("http")
     async def securite(request: Request, call_next):
+        request.state.direct = False
         if settings.dev:
             request.state.utilisateur = settings.dev_utilisateur
-        else:
-            # Seul le proxy Ingress du Supervisor (qui exige une session HA) peut nous joindre.
-            if request.client is None or request.client.host != INGRESS_PROXY_IP:
-                return Response("Accès refusé", status_code=403)
+            request.state.base = ""
+        elif request.client is not None and request.client.host == INGRESS_PROXY_IP:
+            # Via la barre latérale HA : le Supervisor a déjà authentifié l'utilisateur.
             request.state.utilisateur = (request.headers.get("x-remote-user-name") or "").lower()
-        request.state.base = request.headers.get("x-ingress-path", "")
+            request.state.base = request.headers.get("x-ingress-path", "")
+        elif not settings.acces_direct:
+            return Response("Accès refusé : activez l'option « acces_direct » de l'add-on.", status_code=403)
+        else:
+            # Accès direct (proxy nginx…) : connexion obligatoire. Les en-têtes Ingress éventuellement
+            # envoyés par le client sont ignorés.
+            request.state.direct = True
+            request.state.base = ""
+            utilisateur = sessions.verifier(request.cookies.get(COOKIE))
+            chemin = request.url.path
+            if utilisateur is None and chemin != "/connexion" and not chemin.startswith("/static/"):
+                if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+                    return RedirectResponse(f"/connexion?suite={quote(chemin)}", status_code=303)
+                return JSONResponse({"erreur": "Session expirée : reconnectez-vous."}, status_code=401)
+            request.state.utilisateur = utilisateur or ""
         reponse = await call_next(request)
         reponse.headers["X-Content-Type-Options"] = "nosniff"
         reponse.headers["Referrer-Policy"] = "no-referrer"
@@ -172,7 +190,8 @@ def creer_app(settings: Settings) -> FastAPI:
             request,
             nom,
             {"base": request.state.base, "utilisateur": request.state.utilisateur, "actif": actif,
-             "alerte": store.alerte, **ctx},
+             "direct": request.state.direct,
+             "alerte": store.alerte if request.state.utilisateur or not request.state.direct else None, **ctx},
             status_code=status_code,
         )
 
@@ -194,6 +213,52 @@ def creer_app(settings: Settings) -> FastAPI:
                        "Rechargez la page avant d'enregistrer."},
             status_code=409,
         )
+
+    # ---- Connexion (accès direct uniquement) ------------------------------------------
+
+    def suite_sure(suite: str) -> str:
+        """Évite une redirection vers un autre site après connexion."""
+        return suite if suite.startswith("/") and not suite.startswith("//") else "/"
+
+    @app.get("/connexion", response_class=HTMLResponse)
+    def page_connexion(request: Request, suite: str = "/"):
+        if not request.state.direct or request.state.utilisateur:
+            return RedirectResponse(f"{request.state.base}{suite_sure(suite)}", status_code=303)
+        return page(request, "connexion.html", sans_menu=True, suite=suite_sure(suite))
+
+    @app.post("/connexion", response_class=HTMLResponse)
+    async def connexion(request: Request):
+        if not request.state.direct:
+            return RedirectResponse(f"{request.state.base}/", status_code=303)
+        formulaire = await request.form()
+        identifiant = str(formulaire.get("identifiant", "")).strip().lower()
+        suite = suite_sure(str(formulaire.get("suite", "/")))
+        adresse = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+
+        def refus(message: str) -> HTMLResponse:
+            return page(request, "connexion.html", status_code=401, sans_menu=True, suite=suite,
+                        identifiant=identifiant, erreur=message)
+
+        if limiteur.bloque(adresse):
+            log.warning("Connexion refusée (trop de tentatives) depuis %s", adresse)
+            return refus("Trop de tentatives. Réessayez dans un quart d'heure.")
+        if not sessions.verifier_identifiants(identifiant, str(formulaire.get("mot_de_passe", ""))):
+            limiteur.echec(adresse)
+            log.warning("Échec de connexion pour « %s » depuis %s", identifiant, adresse)
+            return refus("Identifiant ou mot de passe incorrect.")
+        limiteur.reussite(adresse)
+        log.info("Connexion de %s depuis %s", identifiant, adresse)
+        reponse = RedirectResponse(suite, status_code=303)
+        reponse.set_cookie(COOKIE, sessions.creer(identifiant), max_age=DUREE_SESSION, httponly=True,
+                           samesite="lax", path="/",
+                           secure=request.headers.get("x-forwarded-proto") == "https")
+        return reponse
+
+    @app.post("/deconnexion")
+    def deconnexion(request: Request):
+        reponse = RedirectResponse(f"{request.state.base}/connexion", status_code=303)
+        reponse.delete_cookie(COOKIE, path="/")
+        return reponse
 
     # ---- Formatage --------------------------------------------------------------------
 

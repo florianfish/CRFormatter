@@ -156,6 +156,14 @@ mark { background: var(--inconnu); color: inherit; border-radius: 2px; }
 
 #texte-test { margin-bottom: 8px; }
 
+/* Connexion */
+.connexion { max-width: 380px; margin: 48px auto; display: flex; flex-direction: column; gap: 14px; }
+.connexion h1 { margin: 0; }
+.connexion label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; color: var(--discret); }
+.connexion label input { font-size: 1.05em; color: var(--texte); }
+.connexion input[type="password"] { font: inherit; color: inherit; background: var(--fond); border: 1px solid var(--bordure); border-radius: 6px; padding: 6px 8px; }
+.deconnexion { margin: 0; }
+
 /* Notification (avec bouton « Annuler ») */
 .notification {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10;

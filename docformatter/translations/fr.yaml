@@ -3,3 +3,11 @@ configuration:
     name: Dossier surveillé
     description: >-
       Formate automatiquement les .docx déposés dans /share/docformatter/entree vers /share/docformatter/sortie.
+  acces_direct:
+    name: Accès direct
+    description: >-
+      Autorise l'accès sans passer par Home Assistant (sous-domaine via le proxy nginx, port 8099). Une connexion avec les utilisateurs ci-dessous est alors obligatoire.
+  utilisateurs:
+    name: Utilisateurs
+    description: >-
+      Comptes pour l'accès direct. Mot de passe de 10 caractères minimum.

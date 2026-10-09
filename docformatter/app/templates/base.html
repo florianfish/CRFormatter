@@ -11,6 +11,7 @@
 <body>
   <header class="barre">
     <a href="./" class="logo">DocFormatter</a>
+    {% if not sans_menu %}
     <nav>
       <a href="./" {% if actif == "formater" %}aria-current="page"{% endif %}>Formater</a>
       <a href="vocabulaire" {% if actif == "vocabulaire" %}aria-current="page"{% endif %}>Vocabulaire</a>
@@ -18,6 +19,12 @@
       <a href="historique" {% if actif == "historique" %}aria-current="page"{% endif %}>Historique</a>
       <a href="expert" class="expert" {% if actif == "expert" %}aria-current="page"{% endif %}>Expert</a>
     </nav>
+    {% if direct %}
+    <form method="post" action="deconnexion" class="deconnexion">
+      <button type="submit" class="petit">Se déconnecter ({{ utilisateur }})</button>
+    </form>
+    {% endif %}
+    {% endif %}
   </header>
   <main>
     {% if alerte %}<p class="message erreur">⚠ {{ alerte }}</p>{% endif %}
