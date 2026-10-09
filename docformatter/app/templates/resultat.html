@@ -47,14 +47,23 @@
 <section class="carte">
   <div class="entete-carte">
     <h2>{{ r.nom }}</h2>
-    {% if r.cle %}<a class="bouton principal" href="telecharger/{{ r.cle }}">Télécharger</a>{% endif %}
+    {% if r.cle %}
+    <div class="actions">
+      <a class="bouton" href="lot/{{ cle_lot }}/document/{{ r.index }}">Retoucher</a>
+      <a class="bouton principal" href="telecharger/{{ r.cle }}">Télécharger</a>
+    </div>
+    {% endif %}
   </div>
 
   {% if r.erreur %}
     <p class="erreur">{{ r.erreur }}</p>
   {% else %}
     <p class="resume">
-      <span class="pastille">{{ r.changements|length }} correction{{ 's' if r.changements|length > 1 }} de mise en forme</span>
+      {% if r.retouche %}
+        <span class="pastille ok">retouché à la main</span>
+      {% else %}
+        <span class="pastille">{{ r.changements|length }} correction{{ 's' if r.changements|length > 1 }} de mise en forme</span>
+      {% endif %}
       {% if not r.orthographe %}
         <span class="pastille">orthographe non vérifiée</span>
       {% elif r.nb_inconnus %}

@@ -283,3 +283,69 @@ def test_dossier_surveille(tmp_path):
     s.passe()
     assert (s.sortie / "cr.docx").read_bytes() == b"ok"
     assert (s.traites / "cr.docx").exists()
+
+
+# ---- Retouche manuelle ----------------------------------------------------------------
+
+def _texte_docx(contenu: bytes) -> list[str]:
+    return [p.text for p in Document(io.BytesIO(contenu)).paragraphs if p.text]
+
+
+def test_retouche_page_et_enregistrement(app):
+    c = client(app)
+    cle, page = formater(c, "ATCD : HTA", "patient stable")
+    assert f'href="lot/{cle}/document/0"' in page.text
+
+    editeur = c.get(f"/lot/{cle}/document/0")
+    assert editeur.status_code == 200 and "\"HTA\"" in editeur.text
+
+    blocs = [
+        {"type": "titre", "texte": "Antécédents"},
+        {"type": "liste", "texte": "HTA traitée", "numerote": True},
+        {"type": "paragraphe", "texte": "ttt  à revoir\nDeuxième ligne collée"},
+        {"type": "paragraphe", "texte": "   "},
+        {"type": "tableau", "lignes": [["Hb", "12 g/dL"]]},
+    ]
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
+    assert r.status_code == 200
+    renvoye = r.json()["blocs"]
+    # Pas de règle automatique (« ttt » reste), espaces doubles réduites, collage découpé, vide ignoré
+    assert [b.get("texte") for b in renvoye[:4]] == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
+    assert renvoye[1]["numerote"] and renvoye[4]["lignes"] == [["Hb", "12 g/dL"]]
+
+    fichier = c.get(f"/telecharger/{r.json()['telechargement']}")
+    assert _texte_docx(fichier.content) == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
+
+    resultat = c.get(f"/lot/{cle}").text
+    assert "retouché à la main" in resultat and "ttt à revoir" in resultat
+
+
+def test_retouche_conservee_apres_ajout_de_vocabulaire(app):
+    c = client(app)
+    cle, _ = formater(c, "texte d'origine")
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "ttt retouché"}]})
+    # Une nouvelle règle ne réécrit pas la retouche…
+    c.post("/api/vocabulaire/remplacement", json={"texte": "ttt", "par": "traitement"})
+    assert "ttt retouché" in c.get(f"/lot/{cle}").text
+    # … sauf un remplacement choisi explicitement depuis le résultat
+    c.post(f"/lot/{cle}/decisions", data={"mot-0": "retouché", "choix-0": "remplacer", "par-0": "revu"})
+    assert "ttt revu" in c.get(f"/lot/{cle}").text
+
+
+def test_abandon_retouche(app):
+    c = client(app)
+    cle, _ = formater(c, "patient stable")
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "autre chose"}]})
+    r = c.delete(f"/api/lot/{cle}/document/0")
+    assert [b["texte"] for b in r.json()["blocs"]] == ["Patient stable"]
+    assert "retouché à la main" not in c.get(f"/lot/{cle}").text
+
+
+def test_retouche_refusee(app):
+    c = client(app)
+    cle, _ = formater(c, "patient stable")
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "  "}]})
+    assert r.status_code == 422 and "vide" in r.json()["erreur"]
+    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script", "texte": "x"}]}).status_code == 422
+    assert c.get(f"/lot/{cle}/document/5").status_code == 404
+    assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404

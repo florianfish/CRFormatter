@@ -7,6 +7,7 @@ les pages du quotidien, pas pour des raisons de droits.
 
 from __future__ import annotations
 
+import copy
 import io
 import logging
 import secrets
@@ -30,9 +31,11 @@ from pydantic import BaseModel, ValidationError
 
 from . import vocabulaire as voc
 from .apercu import diff_html, rendre_blocs
-from .pipeline import formater, traiter_texte
+from .pipeline import finaliser_retouche, formater, traiter_texte
+from .pipeline.model import Bloc
 from .pipeline.spelling import Correcteur, charger_mots
 from .pipeline.writer import modele_par_defaut, valider_modele
+from .retouche import Edition, depuis_editeur, remplacer_mots, vers_editeur
 from .rules import LIBELLES_OPTIONS, Regles, Remplacement, ecrire_yaml, lire_yaml
 from .settings import APP_DIR, INGRESS_PROXY_IP, Settings
 from .store import ConflitVersion, RegleInvalide, RulesStore
@@ -54,12 +57,16 @@ class Fichier:
 
 @dataclass
 class Lot:
-    """Documents d'origine d'un envoi : permet de les reformater après ajout de vocabulaire."""
+    """Documents d'un envoi : originaux (pour reformater après ajout de vocabulaire),
+    résultat courant de chaque document et retouches manuelles."""
 
     originaux: list[tuple[str, bytes]]
     version_regles: str = ""
     rendu: dict[str, Any] = field(default_factory=dict)
     message: dict[str, str] | None = None
+    blocs: dict[int, list[Bloc]] = field(default_factory=dict)      # résultat courant par document
+    retouches: dict[int, list[Bloc]] = field(default_factory=dict)  # saisies manuelles par document
+    telechargements: dict[int, str] = field(default_factory=dict)   # clé du .docx courant
 
 
 class Depot:
@@ -212,8 +219,15 @@ def creer_app(settings: Settings) -> FastAPI:
         cle = depot.ajouter(lot, request.state.utilisateur)
         return RedirectResponse(f"{request.state.base}/lot/{cle}", status_code=303)
 
+    def nom_sortie(nom: str) -> str:
+        return f"{Path(nom).stem} - formaté.docx"
+
     def rendre_lot(lot: Lot, utilisateur: str) -> dict[str, Any]:
-        """Formate (ou reformate si les règles ont changé) tous les documents du lot."""
+        """Formate (ou reformate si les règles ont changé) tous les documents du lot.
+
+        Un document retouché à la main n'est pas reformaté : seules l'orthographe et la
+        mise en page (modèle Word) sont recalculées, les saisies sont conservées telles quelles.
+        """
         if lot.rendu and lot.version_regles == store.version:
             return lot.rendu
         regles = store.get()
@@ -222,22 +236,26 @@ def creer_app(settings: Settings) -> FastAPI:
         inconnus: Counter = Counter()
         suggestions: dict[str, list[str]] = {}
         orthographe = False
-        for nom, data in lot.originaux:
-            entree: dict[str, Any] = {"nom": nom}
+        for i, (nom, data) in enumerate(lot.originaux):
+            entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches}
             try:
-                res = formater(data, regles, mod, corr)
+                if i in lot.retouches:
+                    res = finaliser_retouche(copy.deepcopy(lot.retouches[i]), regles, mod, corr)
+                else:
+                    res = formater(data, regles, mod, corr)
             except Exception:  # noqa: BLE001
                 log.exception("Échec du traitement de %s", nom)
                 entree["erreur"] = "Ce document n'a pas pu être lu. Est-ce bien un fichier Word valide ?"
             else:
-                nom_sortie = f"{Path(nom).stem} - formaté.docx"
-                sorties.append((nom_sortie, res.docx))
+                sorties.append((nom_sortie(nom), res.docx))
                 inconnus.update(res.inconnus)
                 suggestions.update(res.suggestions)
                 orthographe = orthographe or res.orthographe_active
+                lot.blocs[i] = res.blocs
+                lot.telechargements[i] = depot.ajouter(Fichier(nom_sortie(nom), res.docx, MIME_DOCX), utilisateur)
                 entree.update(
-                    cle=depot.ajouter(Fichier(nom_sortie, res.docx, MIME_DOCX), utilisateur),
-                    apercu=rendre_blocs(res.blocs),
+                    cle=lot.telechargements[i],
+                    apercu=rendre_blocs(res.blocs, avec_diff=i not in lot.retouches),
                     changements=res.changements,
                     nb_inconnus=len(res.inconnus),
                     orthographe=res.orthographe_active,
@@ -248,8 +266,8 @@ def creer_app(settings: Settings) -> FastAPI:
         if len(sorties) > 1:
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-                for nom_sortie, contenu in sorties:
-                    z.writestr(nom_sortie, contenu)
+                for nom_fichier, contenu in sorties:
+                    z.writestr(nom_fichier, contenu)
             cle_zip = depot.ajouter(
                 Fichier("comptes-rendus-formatés.zip", buf.getvalue(), "application/zip"), utilisateur)
 
@@ -266,6 +284,13 @@ def creer_app(settings: Settings) -> FastAPI:
         lot = depot.lire(cle, request.state.utilisateur, Lot)
         if lot is None:
             raise HTTPException(404, "Ces documents ne sont plus disponibles (plus d'une heure) : déposez-les à nouveau.")
+        return lot
+
+    def lire_document(request: Request, cle: str, n: int) -> Lot:
+        lot = lire_lot(request, cle)
+        rendre_lot(lot, request.state.utilisateur)
+        if n not in lot.blocs:
+            raise HTTPException(404, "Document introuvable.")
         return lot
 
     @app.get("/lot/{cle}", response_class=HTMLResponse)
@@ -291,11 +316,57 @@ def creer_app(settings: Settings) -> FastAPI:
                 lot.message = {"type": "info", "texte": "Aucun choix n'a été fait : rien n'a changé."}
             else:
                 precedente = await run_in_threadpool(appliquer, request, op)
+                # Les documents retouchés ne sont pas reformatés : on y applique directement
+                # les remplacements choisis ici.
+                remplacements = {m: par.strip() for m, action, par in choix if action == "remplacer"}
+                for n, blocs in list(lot.retouches.items()):
+                    lot.retouches[n] = remplacer_mots(blocs, remplacements)
                 lot.message = {"type": "succes", "annulation": precedente,
                                "texte": "C'est noté ! Le document a été reformaté avec votre vocabulaire."}
         except RegleInvalide as e:
             lot.message = {"type": "erreur", "texte": str(e)}
         return RedirectResponse(f"{request.state.base}/lot/{cle}", status_code=303)
+
+    # ---- Retouche manuelle ------------------------------------------------------------
+
+    @app.get("/lot/{cle}/document/{n}", response_class=HTMLResponse)
+    def page_retouche(request: Request, cle: str, n: int):
+        lot = lire_document(request, cle, n)
+        return page(request, "retouche.html", actif="formater", cle_lot=cle, index=n,
+                    nom_document=lot.originaux[n][0], retouche=n in lot.retouches,
+                    donnees={"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)})
+
+    def etat_document(lot: Lot, n: int) -> dict[str, Any]:
+        compte: Counter = Counter()
+        suggestions: dict[str, list[str]] = {}
+        for bloc in lot.blocs[n]:
+            for b in bloc.textuels():
+                for inc in b.inconnus:
+                    compte[inc.mot] += 1
+                    suggestions[inc.mot] = inc.suggestions
+        return {
+            "inconnus": [{"mot": m, "nombre": nb, "suggestions": suggestions[m]} for m, nb in compte.most_common()],
+            "telechargement": lot.telechargements[n],
+        }
+
+    @app.put("/api/lot/{cle}/document/{n}")
+    def enregistrer_retouche(request: Request, cle: str, n: int, edition: Edition):
+        lot = lire_document(request, cle, n)
+        blocs = depuis_editeur(edition)
+        if not blocs:
+            raise RegleInvalide("Le document est vide : ajoutez du texte avant d'enregistrer.")
+        lot.retouches[n] = blocs
+        lot.rendu = {}  # force le recalcul (orthographe, .docx) de ce document
+        rendre_lot(lot, request.state.utilisateur)
+        return {"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)}
+
+    @app.delete("/api/lot/{cle}/document/{n}")
+    def abandonner_retouche(request: Request, cle: str, n: int):
+        lot = lire_document(request, cle, n)
+        lot.retouches.pop(n, None)
+        lot.rendu = {}
+        rendre_lot(lot, request.state.utilisateur)
+        return {"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)}
 
     @app.get("/telecharger/{cle}")
     def telecharger(request: Request, cle: str):

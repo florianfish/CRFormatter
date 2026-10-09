@@ -92,6 +92,66 @@ with sync_playwright() as p:
     expect(page.locator("#liste-regles .regle").first).to_be_visible()
     print("9. mode expert accessible")
 
+    # 10. Retouche manuelle du document
+    page.goto(URL)
+    page.set_input_files("#fichiers", EXEMPLE)
+    page.click("#envoyer")
+    page.wait_for_url("**/lot/**")
+    page.click("text=Retoucher")
+    page.wait_for_selector("#feuille .bloc")
+    expect(page.locator("#feuille mark.inconnu").first).to_be_visible()
+
+    # Modifier un paragraphe : curseur à la fin, saisie, puis Entrée pour en créer un nouveau
+    paragraphe = page.locator("#feuille p.bloc", has_text="Douleur thoracique")
+    paragraphe.click()
+    page.keyboard.press("End")
+    page.keyboard.type(" (retouche)")
+    page.keyboard.press("Enter")
+    page.keyboard.type("Nouveau paragraphe saisi")
+    expect(page.locator("#etat")).to_have_text("Modifications non enregistrées")
+
+    # Le transformer en titre, puis annuler
+    page.select_option("#type-bloc", "titre")
+    expect(page.locator("#feuille h2.bloc", has_text="Nouveau paragraphe saisi")).to_be_visible()
+    page.click('[data-action="annuler"]')
+    expect(page.locator("#feuille p.bloc", has_text="Nouveau paragraphe saisi")).to_be_visible()
+
+    # Retour arrière en début de paragraphe : fusion avec le précédent
+    page.locator("#feuille p.bloc", has_text="Nouveau paragraphe saisi").click()
+    page.keyboard.press("Home")
+    page.keyboard.press("Backspace")
+    expect(page.locator("#feuille p.bloc", has_text="(retouche)Nouveau paragraphe saisi")).to_be_visible()
+
+    # Remplacer un mot inconnu dans ce document depuis le panneau
+    mot = page.locator(".liste-mots li", has_text="dispnée")
+    mot.locator("input[type=text]").fill("dyspnée")
+    mot.get_by_role("button", name="Remplacer").click()
+    expect(page.locator("#feuille")).to_contain_text("dyspnée d'effort")
+
+    # Cellule de tableau
+    page.locator("#feuille td", has_text="Troponine").click()
+    page.keyboard.press("End")
+    page.keyboard.type(" Tn")
+    page.click('[data-action="ajouter-ligne"]')
+    expect(page.locator("#feuille table.bloc-tableau tr")).to_have_count(3)
+
+    page.click("#enregistrer")
+    expect(page.locator("#etat")).to_have_text("Enregistré")
+    page.screenshot(path=f"{SP}/retouche.png", full_page=True)
+    with page.expect_download() as telechargement:
+        page.click("#telecharger")
+    from docx import Document
+    doc = Document(telechargement.value.path())
+    textes = [p.text for p in doc.paragraphs]
+    assert any("(retouche)Nouveau paragraphe saisi" in t for t in textes), textes
+    assert any("dyspnée d'effort" in t for t in textes), textes
+    assert doc.tables[0].cell(0, 0).text == "Troponine Tn" and len(doc.tables[0].rows) == 3
+    print("10. retouche : saisie, nouveau paragraphe, type, annulation, fusion, remplacement, tableau, .docx")
+
+    page.click("text=← Retour au résultat")
+    expect(page.locator(".pastille", has_text="retouché à la main")).to_be_visible()
+    print("11. document marqué « retouché à la main » dans le résultat")
+
     nav.close()
 
 # 422 (saisie refusée, étape 5) est attendu.

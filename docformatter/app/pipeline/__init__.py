@@ -24,19 +24,22 @@ class Resultat:
     suggestions: dict[str, list[str]] = field(default_factory=dict)
 
 
+def _verifier(resultat: Resultat, regles: Regles, correcteur: Correcteur | None) -> None:
+    if not (regles.options.verifier_orthographe and correcteur is not None and correcteur.disponible):
+        return
+    textuels = [b for bloc in resultat.blocs for b in bloc.textuels() if bloc.type != "titre"]
+    for b, inconnus in zip(textuels, correcteur.verifier([b.texte for b in textuels])):
+        b.inconnus = inconnus
+        for i in inconnus:
+            resultat.inconnus[i.mot] += 1
+            resultat.suggestions[i.mot] = i.suggestions
+    resultat.orthographe_active = True
+
+
 def traiter_blocs(blocs: list[Bloc], regles: Regles, correcteur: Correcteur | None) -> Resultat:
     blocs = structurer(blocs, regles.sections, regles.options.detecter_titres)
-    changements = nettoyer_blocs(blocs, regles)
-    resultat = Resultat(blocs, changements)
-
-    if regles.options.verifier_orthographe and correcteur is not None and correcteur.disponible:
-        textuels = [b for bloc in blocs for b in bloc.textuels() if bloc.type != "titre"]
-        for b, inconnus in zip(textuels, correcteur.verifier([b.texte for b in textuels])):
-            b.inconnus = inconnus
-            for i in inconnus:
-                resultat.inconnus[i.mot] += 1
-                resultat.suggestions[i.mot] = i.suggestions
-        resultat.orthographe_active = True
+    resultat = Resultat(blocs, nettoyer_blocs(blocs, regles))
+    _verifier(resultat, regles, correcteur)
     return resultat
 
 
@@ -45,6 +48,21 @@ def formater(data: bytes, regles: Regles, modele: bytes | None, correcteur: Corr
     resultat.docx = ecrire_docx(
         resultat.blocs, modele, commentaires=regles.options.commentaires_orthographe
     )
+    return resultat
+
+
+def finaliser_retouche(
+    blocs: list[Bloc], regles: Regles, modele: bytes | None, correcteur: Correcteur | None
+) -> Resultat:
+    """Document retouché à la main : seulement l'orthographe et l'écriture, sans aucune règle
+    automatique (les choix de la personne qui a retouché priment)."""
+    for bloc in blocs:
+        for b in bloc.textuels():
+            b.inconnus = []
+            b.original = b.texte  # l'aperçu ne montre plus de différences
+    resultat = Resultat(blocs, [])
+    _verifier(resultat, regles, correcteur)
+    resultat.docx = ecrire_docx(blocs, modele, commentaires=regles.options.commentaires_orthographe)
     return resultat
 
 

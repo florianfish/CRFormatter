@@ -12,6 +12,7 @@ make docker         # idem dans le conteneur de l'add-on, avec Hunspell
 make test           # pytest (le test d'orthographe est sauté sans Hunspell)
 make test-docker    # pytest dans l'image : à lancer avant de conclure sur l'orthographe
 make exemple        # dev-data/exemples/exemple.docx, compte rendu volontairement mal formaté
+make e2e            # parcours complet dans Chrome (Playwright) : à lancer après toute modif d'interface
 ```
 
 Un seul test : `cd docformatter && ../.venv/bin/pytest tests/test_pipeline.py -k sections`.
@@ -28,6 +29,10 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
 - `store.py` : `RulesStore`. **Toute écriture passe par `modifier()`**, ce qui garantit validation,
   écriture atomique, instantané dans `historique/` (auteur + description lisible) et vérification
   de version (HTTP 409). Un fichier invalide est mis de côté et la dernière version valide est rétablie.
+- `retouche.py` + `static/retouche.js` : éditeur de retouche. Un document retouché est stocké dans
+  `Lot.retouches` et passe par `finaliser_retouche` (orthographe + écriture) : **aucune règle
+  automatique n'est réappliquée sur une saisie manuelle**, même si le vocabulaire change.
+  Seul un remplacement choisi explicitement depuis la page de résultat y est appliqué.
 - `vocabulaire.py` : opérations de la secrétaire ; chacune valide sa saisie avec un message
   compréhensible (`RegleInvalide`, HTTP 422) et fournit la phrase affichée dans l'historique.
 - `web.py` : fabrique `creer_app(settings)` ; les tests construisent l'app avec un `Settings` temporaire.

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titre %}Retouche · DocFormatter{% endblock %}
+{% block contenu %}
+<div class="entete-page">
+  <div>
+    <a href="lot/{{ cle_lot }}" class="retour">← Retour au résultat</a>
+    <h1>Retoucher « {{ nom_document }} »</h1>
+  </div>
+  <div class="actions">
+    <span id="etat" class="etat"></span>
+    <button type="button" id="revenir-auto" {% if not retouche %}hidden{% endif %}>Revenir à la version automatique</button>
+    <button type="button" id="enregistrer" class="principal" disabled>Enregistrer</button>
+    <a id="telecharger" class="bouton" href="telecharger/{{ donnees.telechargement }}">Télécharger</a>
+  </div>
+</div>
+<p class="aide">
+  Cliquez dans le texte pour le modifier, comme dans Word. <kbd>Entrée</kbd> crée un nouveau paragraphe,
+  <kbd>Retour arrière</kbd> au début d'un paragraphe le rattache au précédent.
+  Les corrections automatiques ne sont pas réappliquées sur vos retouches.
+</p>
+
+<div class="espace-retouche">
+  <div class="editeur">
+    <div class="barre-outils" role="toolbar" aria-label="Mise en forme du paragraphe sélectionné">
+      <label>Type
+        <select id="type-bloc" disabled>
+          <option value="titre">Titre</option>
+          <option value="paragraphe">Paragraphe</option>
+          <option value="puce">Liste à puces</option>
+          <option value="numero">Liste numérotée</option>
+        </select>
+      </label>
+      <button type="button" data-action="monter" title="Monter le paragraphe" disabled>↑</button>
+      <button type="button" data-action="descendre" title="Descendre le paragraphe" disabled>↓</button>
+      <button type="button" data-action="supprimer" class="danger" disabled>Supprimer</button>
+      <span class="separateur" aria-hidden="true"></span>
+      <button type="button" data-action="ajouter-paragraphe">+ Paragraphe</button>
+      <button type="button" data-action="ajouter-tableau">+ Tableau</button>
+      <span class="outils-tableau" hidden>
+        <button type="button" data-action="ajouter-ligne">+ Ligne</button>
+        <button type="button" data-action="supprimer-ligne">− Ligne</button>
+        <button type="button" data-action="ajouter-colonne">+ Colonne</button>
+        <button type="button" data-action="supprimer-colonne">− Colonne</button>
+      </span>
+      <span class="separateur" aria-hidden="true"></span>
+      <button type="button" data-action="annuler" title="Annuler la dernière action (Ctrl+Z dans le texte annule la frappe)" disabled>↶ Annuler</button>
+    </div>
+    <div class="feuille" id="feuille" lang="fr" data-api="api/lot/{{ cle_lot }}/document/{{ index }}"></div>
+  </div>
+
+  <aside class="carte panneau-mots">
+    <h2>Mots à vérifier</h2>
+    <p class="aide">Surlignés en jaune dans le texte.</p>
+    <ul id="liste-mots" class="liste-mots"></ul>
+  </aside>
+</div>
+
+<script id="donnees" type="application/json">{{ donnees|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="static/retouche.js"></script>{% endblock %}
