@@ -6,11 +6,10 @@ Documentation utilisateur : [docformatter/DOCS.md](docformatter/DOCS.md).
 ## Installation dans Home Assistant
 
 1. À chaque push sur `main`, la GitHub Action lance les tests puis publie les images `amd64` et
-   `aarch64` sur `ghcr.io/florianfish/docformatter-<arch>`. Après la première publication, rendre
-   ces deux paquets **publics** (GitHub › Packages › Package settings) pour que Home Assistant
-   puisse les télécharger.
-2. Décommenter la ligne `image:` de `docformatter/config.yaml`. Tant qu'elle est commentée, le
-   Supervisor construit l'image directement sur la Khadas : c'est plus lent mais pratique pour tester.
+   `aarch64` sur `ghcr.io/florianfish/docformatter-<arch>` (publiques, comme le dépôt).
+2. Home Assistant télécharge l'image correspondant à la `version` de `docformatter/config.yaml` :
+   attendre la fin de l'action avant de mettre à jour l'add-on. Pour tester une modification sans
+   publier, commenter la ligne `image:` : le Supervisor construit alors l'image sur la Khadas.
 3. Dans HA : Paramètres › Modules complémentaires › Boutique › ⋮ › Dépôts → ajouter
    `https://github.com/florianfish/CRFormatter`.
 4. Installer **DocFormatter**, renseigner votre nom d'utilisateur HA dans l'option `experts`, démarrer.

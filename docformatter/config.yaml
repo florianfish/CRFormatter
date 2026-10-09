@@ -26,6 +26,6 @@ schema:
   experts:
     - str
   dossier_surveille: bool
-# Image publiée par la GitHub Action. Tant que cette ligne est commentée,
-# le Supervisor construit l'image localement à partir du Dockerfile.
-# image: ghcr.io/florianfish/docformatter-{arch}
+# Image publiée par la GitHub Action (le tag correspond à « version »).
+# Commenter cette ligne pour que le Supervisor construise l'image localement à partir du Dockerfile.
+image: ghcr.io/florianfish/docformatter-{arch}
