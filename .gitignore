@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 /dev-data/
+
+# Documents réels (données de santé) : jamais dans le dépôt public
+/*.docx
+/exemples-reels/
+~$*

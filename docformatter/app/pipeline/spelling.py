@@ -7,6 +7,7 @@ automatique fausse (molécule, posologie) est plus dangereuse qu'une faute.
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -27,6 +28,15 @@ def _a_ignorer(mot: str, dictionnaire: set[str]) -> bool:
     if any(c.isupper() for c in mot[1:]):
         return True
     return mot.lower() in dictionnaire
+
+
+# Tiret qui n'est pas entre deux lettres (puce « -Suivi », tiret isolé) : Hunspell le collerait au mot.
+_TIRET_ISOLE = re.compile(r"(?<![^\W\d_])-|-(?![^\W\d_])")
+
+
+def _pour_hunspell(texte: str) -> str:
+    """Texte envoyé à Hunspell : même longueur (les mots sont relocalisés par position)."""
+    return _TIRET_ISOLE.sub(" ", texte.replace("\n", " ").replace("\t", " "))
 
 
 class Correcteur:
@@ -58,7 +68,7 @@ class Correcteur:
         if not indices:
             return resultats
         # « ^ » en début de ligne : la ligne est du texte, jamais une commande ispell.
-        entree = "".join("^" + textes[i].replace("\n", " ") + "\n" for i in indices)
+        entree = "".join("^" + _pour_hunspell(textes[i]) + "\n" for i in indices)
         sortie = subprocess.run(
             [self.binaire, "-a", "-i", "utf-8", "-d", self.langue, "-p", self._perso.name],
             input=entree, capture_output=True, text=True, encoding="utf-8", timeout=60, check=True,

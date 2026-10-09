@@ -92,7 +92,7 @@ with sync_playwright() as p:
     expect(page.locator("#liste-regles .regle").first).to_be_visible()
     print("9. mode expert accessible")
 
-    # 10. Retouche manuelle du document
+    # 10. Retouche manuelle du document (sur place : en-têtes et mise en page conservés)
     page.goto(URL)
     page.set_input_files("#fichiers", EXEMPLE)
     page.click("#envoyer")
@@ -102,7 +102,7 @@ with sync_playwright() as p:
     expect(page.locator("#feuille mark.inconnu").first).to_be_visible()
 
     # Modifier un paragraphe : curseur à la fin, saisie, puis Entrée pour en créer un nouveau
-    paragraphe = page.locator("#feuille p.bloc", has_text="Douleur thoracique")
+    paragraphe = page.locator("#feuille p.bloc", has_text="douleur thoracique")
     paragraphe.click()
     page.keyboard.press("End")
     page.keyboard.type(" (retouche)")
@@ -110,11 +110,14 @@ with sync_playwright() as p:
     page.keyboard.type("Nouveau paragraphe saisi")
     expect(page.locator("#etat")).to_have_text("Modifications non enregistrées")
 
-    # Le transformer en titre, puis annuler
-    page.select_option("#type-bloc", "titre")
-    expect(page.locator("#feuille h2.bloc", has_text="Nouveau paragraphe saisi")).to_be_visible()
+    # Annuler : la frappe puis la création du paragraphe
     page.click('[data-action="annuler"]')
-    expect(page.locator("#feuille p.bloc", has_text="Nouveau paragraphe saisi")).to_be_visible()
+    page.click('[data-action="annuler"]')
+    expect(page.locator("#feuille p.bloc", has_text="Nouveau paragraphe saisi")).to_have_count(0)
+    paragraphe.click()
+    page.keyboard.press("End")
+    page.keyboard.press("Enter")
+    page.keyboard.type("Nouveau paragraphe saisi")
 
     # Retour arrière en début de paragraphe : fusion avec le précédent
     page.locator("#feuille p.bloc", has_text="Nouveau paragraphe saisi").click()
@@ -131,22 +134,20 @@ with sync_playwright() as p:
     # Gras avec le bouton, italique avec Ctrl+I, sur le dernier mot sélectionné au clavier
     examen = page.locator("#feuille p.bloc", has_text="Patient eupnéique")
     examen.click()
+    page.keyboard.press("Control+Home")
     page.keyboard.press("End")
     page.keyboard.press("Shift+Control+ArrowLeft")
     page.keyboard.press("Shift+Control+ArrowLeft")  # « apyrétique. » : le mot et le point
     page.click('[data-action="gras"]')
     expect(page.locator('[data-action="gras"]')).to_have_attribute("aria-pressed", "true")
     page.keyboard.press("Control+i")
-    expect(examen.locator("b")).to_have_count(1)
-    page.click("text=Antécédents")  # quitter le paragraphe
+    page.locator("#feuille p.bloc", has_text="Motif").click()  # quitter le paragraphe
     expect(page.locator("#feuille p.bloc", has_text="Patient eupnéique").locator("b i, i b")).to_have_count(1)
 
     # Cellule de tableau
-    page.locator("#feuille td", has_text="Troponine").click()
+    page.locator("#feuille td p", has_text="Troponine").click()
     page.keyboard.press("End")
     page.keyboard.type(" Tn")
-    page.click('[data-action="ajouter-ligne"]')
-    expect(page.locator("#feuille table.bloc-tableau tr")).to_have_count(3)
 
     page.click("#enregistrer")
     expect(page.locator("#etat")).to_have_text("Enregistré")
@@ -158,11 +159,17 @@ with sync_playwright() as p:
     textes = [p.text for p in doc.paragraphs]
     assert any("(retouche)Nouveau paragraphe saisi" in t for t in textes), textes
     assert any("dyspnée d'effort" in t for t in textes), textes
-    assert doc.tables[0].cell(0, 0).text == "Troponine Tn" and len(doc.tables[0].rows) == 3
+    assert doc.tables[0].cell(0, 0).text == "Troponine Tn"
     examen_docx = next(p for p in doc.paragraphs if p.text.startswith("Patient eupnéique"))
-    styles = [(r.text, bool(r.bold), bool(r.italic)) for r in examen_docx.runs]
+    styles = [(r.text, bool(r.bold), bool(r.italic)) for r in examen_docx.runs if r.text]
     assert styles[0] == ("Patient eupnéique, ", False, False) and styles[1][1:] == (True, True), styles
-    print("10. retouche : saisie, paragraphes, type, annulation, fusion, gras/italique, remplacement, tableau, .docx")
+    # En-têtes et pied de page du document d'origine conservés
+    section = doc.sections[0]
+    assert section.different_first_page_header_footer
+    assert "HÔPITAL FICTIF" in section.first_page_header.paragraphs[0].text
+    assert "DUPONT Jean" in section.header.paragraphs[0].text
+    assert "Hôpital fictif" in section.footer.paragraphs[0].text
+    print("10. retouche : saisie, paragraphes, annulation, fusion, remplacement, gras/italique, tableau, .docx, en-têtes")
 
     page.click("text=← Retour au résultat")
     expect(page.locator(".pastille", has_text="retouché à la main")).to_be_visible()

@@ -1,11 +1,13 @@
 "use strict";
 
 /*
- * Éditeur de retouche. Le document est une liste de blocs :
- *   { type: "titre" | "paragraphe" | "liste", segments, numerote }  ou  { type: "tableau", lignes: [[segments]] }
- * où un segment est { texte, gras, italique, souligne }.
+ * Éditeur de retouche, sur les paragraphes du document d'origine :
+ *   { type: "paragraphe", id, origine, segments, protege, fin_section }
+ *   { type: "tableau", id, lignes: [[ [paragraphe] ]] }   (cellule = liste de paragraphes)
+ * où un segment est { texte, gras, italique, souligne }. `id` relie le paragraphe à celui du
+ * document Word ; un paragraphe ajouté n'a pas d'id mais une `origine` (mise en page reprise).
  * La frappe met à jour l'état sans redessiner ; les actions de structure (couper, fusionner,
- * déplacer, changer de type…) sont mémorisées pour « ↶ Annuler » puis redessinent la feuille.
+ * déplacer…) sont mémorisées pour « ↶ Annuler » puis redessinent la feuille.
  */
 
 const donnees = JSON.parse(document.getElementById("donnees").textContent);
@@ -17,8 +19,8 @@ let blocs = donnees.blocs;
 let inconnus = donnees.inconnus;      // [{ mot, nombre, suggestions }]
 let telechargement = donnees.telechargement;
 let reference = JSON.stringify(blocs); // dernier état enregistré
-let courant = null;                    // { index, ligne?, colonne? } : dernier élément ayant eu le focus
-let avantSaisie = null;                // état au début de la saisie dans un bloc (pour « Annuler »)
+let courant = null;                    // position du dernier paragraphe ayant eu le focus
+let avantSaisie = null;                // état au début de la saisie dans un paragraphe (pour « Annuler »)
 const pile = [];                       // états précédents pour « Annuler »
 
 // Gras / italique / souligné produisent des balises <b>, <i>, <u> plutôt que des styles CSS.
@@ -56,6 +58,18 @@ function majEtat() {
   document.getElementById("etat").textContent = m ? "Modifications non enregistrées" : "Enregistré";
   document.getElementById("telecharger").textContent = m ? "Enregistrer et télécharger" : "Télécharger";
   document.querySelector('[data-action="annuler"]').disabled = pile.length === 0;
+}
+
+/** Paragraphe désigné par une position : { index } ou { index, ligne, colonne, k } (cellule). */
+function paragrapheDe(pos) {
+  if (!pos || pos.index >= blocs.length) return null;
+  const bloc = blocs[pos.index];
+  if (pos.ligne == null) return bloc.type === "paragraphe" ? bloc : null;
+  return bloc.lignes?.[pos.ligne]?.[pos.colonne]?.[pos.k] ?? null;
+}
+
+function tousLesParagraphes() {
+  return blocs.flatMap((b) => (b.type === "tableau" ? b.lignes.flat(2) : [b]));
 }
 
 // ---- Segments (texte + mise en forme) -----------------------------------------------
@@ -102,7 +116,11 @@ function lireSegments(racine) {
       return;
     }
     if (noeud.nodeType !== Node.ELEMENT_NODE) return;
-    if (noeud.tagName === "BR") { segments.push({ texte: "\n", ...style }); return; }
+    if (noeud.tagName === "BR") {
+      // Un <br> final est ajouté par le navigateur pour garder la ligne visible : pas un retour à la ligne
+      if (noeud.nextSibling || noeud.parentNode !== racine) segments.push({ texte: "\n", ...style });
+      return;
+    }
     const s = { ...style };
     const balise = noeud.tagName;
     const css = noeud.style;
@@ -123,21 +141,30 @@ function motifInconnus() {
   return new RegExp(`(?<![\\p{L}\\p{N}])(${mots.join("|")})(?![\\p{L}\\p{N}])`, "gu");
 }
 
+function texteAvecRetours(texte) {
+  const fragment = document.createDocumentFragment();
+  texte.split("\n").forEach((morceau, i) => {
+    if (i > 0) fragment.append(document.createElement("br"));
+    if (morceau) fragment.append(morceau);
+  });
+  return fragment;
+}
+
 function surligner(texte, motif) {
   const fragment = document.createDocumentFragment();
   if (!motif) {
-    fragment.append(texte);
+    fragment.append(texteAvecRetours(texte));
     return fragment;
   }
   let pos = 0;
   for (const m of texte.matchAll(motif)) {
-    fragment.append(texte.slice(pos, m.index));
+    fragment.append(texteAvecRetours(texte.slice(pos, m.index)));
     const info = inconnus.find((x) => x.mot === m[0]);
     fragment.append(el("mark", { class: "inconnu", title: info?.suggestions.length
       ? `Suggestions : ${info.suggestions.join(", ")}` : "Mot inconnu" }, m[0]));
     pos = m.index + m[0].length;
   }
-  fragment.append(texte.slice(pos));
+  fragment.append(texteAvecRetours(texte.slice(pos)));
   return fragment;
 }
 
@@ -167,62 +194,75 @@ function positionCurseur(element) {
   const avant = r.cloneRange();
   avant.selectNodeContents(element);
   avant.setEnd(r.startContainer, r.startOffset);
-  return avant.toString().length;
+  // Les <br> comptent pour un caractère (« \n ») dans le texte
+  const fragment = avant.cloneContents();
+  return fragment.textContent.length + fragment.querySelectorAll("br").length;
 }
 
 function placerCurseur(element, offset) {
   element.focus();
   const sel = getSelection();
   const r = document.createRange();
-  const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let reste = offset ?? Infinity;
+  const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let noeud;
   while ((noeud = parcours.nextNode())) {
-    if (reste <= noeud.length) {
-      r.setStart(noeud, reste);
-      r.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      return;
+    if (noeud.nodeType === Node.ELEMENT_NODE) {
+      if (noeud.tagName === "BR") {
+        if (reste === 0) { r.setStartBefore(noeud); break; }
+        reste -= 1;
+      }
+      continue;
     }
+    if (reste <= noeud.length) { r.setStart(noeud, reste); break; }
     reste -= noeud.length;
   }
-  r.selectNodeContents(element);
-  r.collapse(false);
+  if (!noeud) {
+    r.selectNodeContents(element);
+    r.collapse(false);
+  } else {
+    r.collapse(true);
+  }
   sel.removeAllRanges();
   sel.addRange(r);
 }
 
-function elementDe(cible) {
-  if (!cible) return null;
-  const { index, ligne, colonne } = cible;
+function elementDe(pos) {
+  if (!pos) return null;
+  const { index, ligne, colonne, k } = pos;
   return ligne == null
     ? feuille.querySelector(`[data-index="${index}"]`)
-    : feuille.querySelector(`[data-index="${index}"] [data-ligne="${ligne}"][data-colonne="${colonne}"]`);
+    : feuille.querySelector(`[data-index="${index}"] [data-ligne="${ligne}"][data-colonne="${colonne}"][data-k="${k}"]`);
 }
 
 // ---- Rendu de la feuille ------------------------------------------------------------
 
-function zoneEditable(element, lire, ecrire, position) {
-  element.contentEditable = "true";
-  element.spellcheck = false;
-  element.classList.add("editable");
-  element.append(rendreSegments(lire()));
+function zoneParagraphe(element, p, pos) {
+  element.append(rendreSegments(p.segments));
   element.addEventListener("focus", () => {
-    courant = position;
+    courant = pos;
     avantSaisie = instantane();
     majBarre();
   });
+  if (p.protege) {
+    element.classList.add("protege");
+    element.title = "Ce paragraphe contient un lien, un champ automatique ou une image : il est conservé tel quel.";
+    element.tabIndex = 0;
+    return;
+  }
+  element.contentEditable = "true";
+  element.spellcheck = false;
+  element.classList.add("editable");
   element.addEventListener("input", () => {
-    if (!element.textContent) element.replaceChildren(); // pas de <br> résiduel : le texte d'aide réapparaît
-    ecrire(lireSegments(element));
+    if (!element.textContent && !element.querySelector("br + br")) element.replaceChildren();
+    p.segments = lireSegments(element);
     majEtat();
   });
   element.addEventListener("blur", () => {
     // Un élément retiré par un nouveau rendu perd aussi le focus : rien à faire dans ce cas.
     if (!element.isConnected) return;
     validerSaisie();
-    element.replaceChildren(rendreSegments(lire())); // met à jour le surlignage
+    element.replaceChildren(rendreSegments(p.segments)); // met à jour le surlignage
     majEtat();
   });
   // Collage et glisser-déposer : texte brut uniquement (pas de mise en forme étrangère)
@@ -231,19 +271,20 @@ function zoneEditable(element, lire, ecrire, position) {
     document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
   });
   element.addEventListener("drop", (e) => e.preventDefault());
+  element.addEventListener("keydown", (e) => clavier(e, element, pos));
 }
 
-function elementBloc(bloc, index, numero) {
+function elementBloc(bloc, index) {
   if (bloc.type === "tableau") {
-    const table = el("table", { class: "bloc bloc-tableau", "data-index": index });
+    const table = el("table", { class: "bloc-tableau", "data-index": index });
     bloc.lignes.forEach((ligne, l) => {
       const tr = el("tr");
-      ligne.forEach((_, c) => {
-        const td = el("td", { "data-ligne": l, "data-colonne": c });
-        zoneEditable(td, () => bloc.lignes[l][c], (s) => { bloc.lignes[l][c] = s; }, { index, ligne: l, colonne: c });
-        td.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") e.preventDefault();
-          raccourcis(e);
+      ligne.forEach((cellule, c) => {
+        const td = el("td");
+        cellule.forEach((p, k) => {
+          const element = el("p", { class: "bloc", "data-ligne": l, "data-colonne": c, "data-k": k });
+          zoneParagraphe(element, p, { index, ligne: l, colonne: c, k });
+          td.append(element);
         });
         tr.append(td);
       });
@@ -251,24 +292,17 @@ function elementBloc(bloc, index, numero) {
     });
     return table;
   }
-
-  const balise = bloc.type === "titre" ? "h2" : "p";
-  const element = el(balise, { class: `bloc bloc-${bloc.type}`, "data-index": index });
-  if (bloc.type === "liste") element.dataset.puce = bloc.numerote ? `${numero}.` : "•";
-  zoneEditable(element, () => bloc.segments, (s) => { bloc.segments = s; }, { index });
-  element.addEventListener("keydown", (e) => clavier(e, element, index));
+  const element = el("p", { class: "bloc", "data-index": index });
+  if (bloc.fin_section) {
+    element.classList.add("fin-section");
+    element.title = "Fin de section : change la mise en page (colonnes, marges) de ce qui suit.";
+  }
+  zoneParagraphe(element, bloc, { index });
   return element;
 }
 
 function rendre(focus = null, offset = null) {
-  let numero = 0;
-  feuille.replaceChildren(...blocs.map((bloc, i) => {
-    numero = bloc.type === "liste" && bloc.numerote ? numero + 1 : 0;
-    return elementBloc(bloc, i, numero);
-  }));
-  if (!blocs.length) {
-    feuille.append(el("p", { class: "vide" }, "Le document est vide. Utilisez « + Paragraphe » pour ajouter du texte."));
-  }
+  feuille.replaceChildren(...blocs.map((bloc, i) => elementBloc(bloc, i)));
   const element = elementDe(focus);
   if (element) placerCurseur(element, offset);
   else { courant = null; majBarre(); }
@@ -278,60 +312,53 @@ function rendre(focus = null, offset = null) {
 
 // ---- Clavier ------------------------------------------------------------------------
 
-function raccourcis(e) {
-  if (!(e.ctrlKey || e.metaKey)) return;
-  if (e.key.toLowerCase() === "s") {
+function clavier(e, element, pos) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();
     enregistrer();
+    return;
   }
-  // Ctrl+B / Ctrl+I / Ctrl+U : gérés nativement par le navigateur
-}
-
-function clavier(e, element, index) {
-  const bloc = blocs[index];
-  if (e.key === "Enter" && !e.isComposing) {
+  // Ctrl+B / Ctrl+I / Ctrl+U et Maj+Entrée (retour à la ligne) : gérés par le navigateur
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
-    const pos = positionCurseur(element);
-    const type = bloc.type === "titre" ? "paragraphe" : bloc.type;
-    // Entrée sur une puce vide : on sort de la liste, comme dans Word
-    if (bloc.type === "liste" && !texteDe(bloc.segments)) {
-      modifierStructure(() => { bloc.type = "paragraphe"; });
-      rendre({ index }, 0);
-      return;
-    }
+    if (pos.ligne != null) return; // pas de nouveau paragraphe dans une cellule
+    const p = blocs[pos.index];
+    const curseur = positionCurseur(element);
     modifierStructure(() => {
-      const [avant, apres] = couper(bloc.segments, pos);
-      bloc.segments = avant;
-      blocs.splice(index + 1, 0, { type, segments: apres, numerote: bloc.numerote && type === "liste" });
+      const [avant, apres] = couper(p.segments, curseur);
+      p.segments = avant;
+      blocs.splice(pos.index + 1, 0, {
+        type: "paragraphe", id: null, origine: p.id ?? p.origine, segments: apres, protege: false, fin_section: false,
+      });
     });
-    rendre({ index: index + 1 }, 0);
-  } else if (e.key === "Backspace" && getSelection().isCollapsed && positionCurseur(element) === 0 && index > 0) {
-    const precedent = blocs[index - 1];
-    if (precedent.type === "tableau") return;
+    rendre({ index: pos.index + 1 }, 0);
+  } else if (e.key === "Backspace" && pos.ligne == null && pos.index > 0
+             && getSelection().isCollapsed && positionCurseur(element) === 0) {
+    const p = blocs[pos.index];
+    const precedent = blocs[pos.index - 1];
+    if (precedent.type !== "paragraphe" || precedent.protege || p.fin_section) return;
     e.preventDefault();
     const jonction = texteDe(precedent.segments).length;
     modifierStructure(() => {
-      precedent.segments = normaliser([...precedent.segments, ...bloc.segments]);
-      blocs.splice(index, 1);
+      precedent.segments = normaliser([...precedent.segments, ...p.segments]);
+      blocs.splice(pos.index, 1);
     });
-    rendre({ index: index - 1 }, jonction);
-  } else {
-    raccourcis(e);
+    rendre({ index: pos.index - 1 }, jonction);
   }
 }
 
 // ---- Barre d'outils -----------------------------------------------------------------
 
 function majBarre() {
-  const bloc = courant ? blocs[courant.index] : null;
-  const select = document.getElementById("type-bloc");
-  select.disabled = !bloc || bloc.type === "tableau";
-  select.value = !bloc || bloc.type === "tableau" ? ""
-    : bloc.type === "liste" ? (bloc.numerote ? "numero" : "puce") : bloc.type;
-  for (const action of ["monter", "descendre", "supprimer", "gras", "italique", "souligne"]) {
-    document.querySelector(`[data-action="${action}"]`).disabled = !bloc;
-  }
-  document.querySelector(".outils-tableau").hidden = !bloc || bloc.type !== "tableau";
+  const p = paragrapheDe(courant);
+  const editable = p && !p.protege;
+  const corps = p && courant.ligne == null;
+  const bouton = (action) => document.querySelector(`[data-action="${action}"]`);
+  for (const action of ["gras", "italique", "souligne"]) bouton(action).disabled = !editable;
+  bouton("monter").disabled = !corps || p.fin_section || courant.index === 0;
+  bouton("descendre").disabled = !corps || p.fin_section || courant.index >= blocs.length - 1;
+  bouton("supprimer").disabled = !corps || p.protege || p.fin_section;
+  bouton("ajouter-paragraphe").disabled = !courant;
   majBoutonsStyle();
 }
 
@@ -353,21 +380,29 @@ function styler(commande) {
   majBoutonsStyle();
 }
 
+/** Paragraphe du corps dont un nouveau paragraphe reprend la mise en page. */
+function modeleAvant(index) {
+  for (let i = index; i >= 0; i--) {
+    const b = blocs[i];
+    if (b.type === "paragraphe" && !b.fin_section) return b.id ?? b.origine;
+  }
+  const premier = blocs.find((b) => b.type === "paragraphe");
+  return premier ? premier.id ?? premier.origine : null;
+}
+
 const actions = {
   gras: () => styler("bold"),
   italique: () => styler("italic"),
   souligne: () => styler("underline"),
   monter() {
     const { index } = courant;
-    if (index === 0) return;
     modifierStructure(() => { [blocs[index - 1], blocs[index]] = [blocs[index], blocs[index - 1]]; });
-    rendre({ ...courant, index: index - 1 });
+    rendre({ index: index - 1 });
   },
   descendre() {
     const { index } = courant;
-    if (index >= blocs.length - 1) return;
     modifierStructure(() => { [blocs[index + 1], blocs[index]] = [blocs[index], blocs[index + 1]]; });
-    rendre({ ...courant, index: index + 1 });
+    rendre({ index: index + 1 });
   },
   supprimer() {
     const { index } = courant;
@@ -375,50 +410,19 @@ const actions = {
     rendre(blocs.length ? { index: Math.min(index, blocs.length - 1) } : null);
   },
   "ajouter-paragraphe"() {
-    const index = courant ? courant.index + 1 : blocs.length;
-    modifierStructure(() => blocs.splice(index, 0, { type: "paragraphe", segments: [], numerote: false }));
+    const index = courant.index + 1;
+    const origine = modeleAvant(courant.index);
+    if (!origine) return;
+    modifierStructure(() => blocs.splice(index, 0, {
+      type: "paragraphe", id: null, origine, segments: [], protege: false, fin_section: false,
+    }));
     rendre({ index }, 0);
-  },
-  "ajouter-tableau"() {
-    const index = courant ? courant.index + 1 : blocs.length;
-    modifierStructure(() => blocs.splice(index, 0, { type: "tableau", lignes: [[[], []], [[], []]] }));
-    rendre({ index, ligne: 0, colonne: 0 });
-  },
-  "ajouter-ligne"() {
-    const t = blocs[courant.index];
-    const l = courant.ligne + 1;
-    modifierStructure(() => t.lignes.splice(l, 0, t.lignes[0].map(() => [])));
-    rendre({ ...courant, ligne: l, colonne: 0 });
-  },
-  "supprimer-ligne"() {
-    const t = blocs[courant.index];
-    modifierStructure(() => {
-      t.lignes.splice(courant.ligne, 1);
-      if (!t.lignes.length) blocs.splice(courant.index, 1);
-    });
-    const reste = blocs[courant.index]?.lignes?.length;
-    rendre(reste ? { ...courant, ligne: Math.min(courant.ligne, reste - 1) } : null);
-  },
-  "ajouter-colonne"() {
-    const t = blocs[courant.index];
-    const c = courant.colonne + 1;
-    modifierStructure(() => t.lignes.forEach((ligne) => ligne.splice(c, 0, [])));
-    rendre({ ...courant, colonne: c });
-  },
-  "supprimer-colonne"() {
-    const t = blocs[courant.index];
-    modifierStructure(() => {
-      t.lignes.forEach((ligne) => ligne.splice(courant.colonne, 1));
-      if (!t.lignes[0].length) blocs.splice(courant.index, 1);
-    });
-    const reste = blocs[courant.index]?.lignes?.[0]?.length;
-    rendre(reste ? { ...courant, colonne: Math.min(courant.colonne, reste - 1) } : null);
   },
   annuler() {
     validerSaisie();
     if (!pile.length) return;
     blocs = JSON.parse(pile.pop());
-    rendre(courant && courant.index < blocs.length ? courant : null);
+    rendre(paragrapheDe(courant) ? courant : null);
   },
 };
 
@@ -428,25 +432,13 @@ document.querySelectorAll(".barre-outils button").forEach((bouton) => {
   bouton.addEventListener("click", () => actions[bouton.dataset.action]());
 });
 
-document.getElementById("type-bloc").addEventListener("change", (e) => {
-  if (!courant) return;
-  const bloc = blocs[courant.index];
-  modifierStructure(() => {
-    bloc.type = { titre: "titre", paragraphe: "paragraphe", puce: "liste", numero: "liste" }[e.target.value];
-    bloc.numerote = e.target.value === "numero";
-  });
-  rendre({ index: courant.index });
-});
-
 // ---- Mots à vérifier ----------------------------------------------------------------
 
 function remplacerPartout(mot, par) {
   const echappe = mot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const motif = new RegExp(`(?<![\\p{L}\\p{N}])${echappe}(?![\\p{L}\\p{N}])`, "gu");
-  const remplacer = (segments) => segments.map((s) => ({ ...s, texte: s.texte.replace(motif, par) }));
-  for (const bloc of blocs) {
-    if (bloc.type === "tableau") bloc.lignes = bloc.lignes.map((l) => l.map(remplacer));
-    else bloc.segments = remplacer(bloc.segments);
+  for (const p of tousLesParagraphes()) {
+    if (!p.protege) p.segments = p.segments.map((s) => ({ ...s, texte: s.texte.replace(motif, par) }));
   }
 }
 
@@ -505,7 +497,7 @@ function charger(r) {
   telechargement = r.telechargement;
   reference = instantane();
   document.getElementById("telecharger").href = `telecharger/${telechargement}`;
-  rendre(courant && courant.index < blocs.length ? courant : null);
+  rendre(paragrapheDe(courant) ? courant : null);
 }
 
 async function enregistrer() {
@@ -532,7 +524,7 @@ document.getElementById("telecharger").addEventListener("click", async (e) => {
 });
 
 document.getElementById("revenir-auto").addEventListener("click", async () => {
-  if (!confirm("Abandonner toutes vos retouches et revenir au document mis en forme automatiquement ?")) return;
+  if (!confirm("Abandonner toutes vos retouches et revenir au document corrigé automatiquement ?")) return;
   try {
     memoriser();
     charger(await api("DELETE", URL_API));

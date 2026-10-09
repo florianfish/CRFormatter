@@ -13,7 +13,7 @@
 <nav class="onglets" role="tablist">
   <button type="button" data-onglet="regles" class="actif">Règles de mise en forme</button>
   <button type="button" data-onglet="tester">Tester</button>
-  <button type="button" data-onglet="fichiers">Modèle et fichiers</button>
+  <button type="button" data-onglet="fichiers">Fichiers</button>
 </nav>
 
 <section id="onglet-regles" class="onglet">
@@ -44,19 +44,6 @@ patient eupnéique,apyrétique. TA: 13/8 ; FC: 72bpm. Pas d'oedeme...</textarea>
 </section>
 
 <section id="onglet-fichiers" class="onglet" hidden>
-  <div class="carte">
-    <h2>Modèle Word</h2>
-    <p class="aide">
-      Le document produit reprend les styles, marges, en-tête et pied de page de ce modèle (son contenu est ignoré).
-      Styles utilisés : <em>Titre 1</em>, <em>Normal</em>, <em>Liste à puces</em>, <em>Liste à numéros</em>, <em>Grille du tableau</em>.
-    </p>
-    <p>Modèle actuel : <strong id="modele-actuel">{{ "personnalisé" if modele_perso else "par défaut" }}</strong></p>
-    <div class="outils">
-      <a class="bouton" href="expert/modele">Télécharger le modèle actuel</a>
-      <label class="bouton">Déposer un modèle (.docx)<input type="file" id="modele" accept=".docx" hidden></label>
-      <button type="button" id="modele-defaut">Revenir au modèle par défaut</button>
-    </div>
-  </div>
   <div class="carte">
     <h2>Import / export de toutes les règles</h2>
     <p class="aide">L'import remplace l'ensemble (vocabulaire compris) ; il apparaît dans l'historique et peut être annulé.</p>

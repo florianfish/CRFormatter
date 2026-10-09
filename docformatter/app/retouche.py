@@ -1,24 +1,24 @@
 """Retouche manuelle d'un document formaté : format échangé avec l'éditeur et conversions.
 
-L'éditeur manipule des *segments* (morceaux de texte de même mise en forme) ; le modèle interne
-garde le texte brut + des plages `Format`, pour que l'orthographe et les remplacements
-continuent de travailler sur du texte simple.
+L'éditeur affiche les paragraphes du document d'origine, chacun repéré par son identifiant
+(`source`). Un paragraphe que la personne n'a pas modifié est repris tel quel (polices, tailles…) ;
+un paragraphe modifié est réécrit avec la police de son texte d'origine ; un paragraphe ajouté
+reprend la mise en page de celui dont il est issu (`origine`).
 """
 
 from __future__ import annotations
 
 import copy
-import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from .pipeline.cleaner import Nettoyeur
-from .pipeline.model import Bloc, Format
+from .pipeline.model import Bloc, Format, TexteStyle, fusionner
 from .rules import Regles
+from .store import RegleInvalide
 
 TEXTE_MAX = 20_000
-SEGMENTS_MAX = 2_000
 ESPACE_INVISIBLE = "\u200b"
 
 
@@ -32,124 +32,142 @@ class Segment(BaseModel):
         return self.gras, self.italique, self.souligne
 
 
-Segments = list[Segment]
+class ParagrapheEdite(BaseModel):
+    id: str | None = Field(None, max_length=40)
+    origine: str | None = Field(None, max_length=40)
+    segments: list[Segment] = Field(default_factory=list, max_length=2_000)
 
 
-class BlocEdite(BaseModel):
-    type: Literal["titre", "paragraphe", "liste", "tableau"]
-    segments: Segments = Field(default_factory=list, max_length=SEGMENTS_MAX)
-    numerote: bool = False
-    lignes: list[list[Segments]] = Field(default_factory=list, max_length=500)
+class BlocEdite(ParagrapheEdite):
+    type: Literal["paragraphe", "tableau"]
+    lignes: list[list[list[ParagrapheEdite]]] = Field(default_factory=list, max_length=500)
 
 
 class Edition(BaseModel):
-    blocs: list[BlocEdite] = Field(max_length=5000)
+    blocs: list[BlocEdite] = Field(max_length=5_000)
 
 
 # ---- Modèle interne → éditeur ----------------------------------------------------------
 
-def _segments(bloc: Bloc) -> list[dict]:
+def _segments(p: Bloc) -> list[dict]:
     return [
         {"texte": t.texte, "gras": t.gras, "italique": t.italique, "souligne": t.souligne}
-        for t in Bloc("paragraphe", texte=bloc.texte, formats=bloc.formats).troncons()
+        for t in Bloc("paragraphe", texte=p.texte, formats=p.formats).troncons()
     ]
+
+
+def _paragraphe(p: Bloc) -> dict:
+    return {"type": "paragraphe", "id": p.source, "origine": p.origine, "segments": _segments(p),
+            "protege": p.protege, "fin_section": p.fin_section}
 
 
 def vers_editeur(blocs: list[Bloc]) -> list[dict]:
     resultat = []
     for b in blocs:
         if b.type == "tableau":
-            resultat.append({"type": "tableau", "lignes": [[_segments(c) for c in ligne] for ligne in b.lignes]})
+            resultat.append({"type": "tableau", "id": b.source, "lignes": [
+                [[_paragraphe(p) for p in cellule.paragraphes] for cellule in ligne] for ligne in b.lignes
+            ]})
         else:
-            resultat.append({"type": b.type, "segments": _segments(b), "numerote": b.numerote})
+            resultat.append(_paragraphe(b))
     return resultat
 
 
 # ---- Éditeur → modèle interne ----------------------------------------------------------
 
-def _texte_et_formats(segments: Segments) -> tuple[str, list[Format]]:
-    """Concatène les segments ; espaces multiples réduites (insécables conservées)."""
+def _memes_segments(saisis: list[Segment], p: Bloc) -> bool:
+    return [s.model_dump() for s in saisis if s.texte] == _segments(p)
+
+
+def _appliquer_segments(p: Bloc, segments: list[Segment]) -> None:
     texte, formats = "", []
     for seg in segments:
-        morceau = re.sub(r"[ \t]+", " ", seg.texte.replace(ESPACE_INVISIBLE, ""))
-        if texte.endswith(" ") and morceau.startswith(" "):
-            morceau = morceau[1:]
+        morceau = seg.texte.replace(ESPACE_INVISIBLE, "").replace("\r", "")
         if morceau and any(seg.attributs()):
             formats.append(Format(len(texte), len(texte) + len(morceau), *seg.attributs()))
         texte += morceau
-    return texte, _fusionner(formats)
+    p.texte, p.formats = texte, fusionner(formats)
 
 
-def _fusionner(formats: list[Format]) -> list[Format]:
-    """Fusionne les plages contiguës de même mise en forme."""
-    resultat: list[Format] = []
-    for f in sorted(formats, key=lambda x: x.debut):
-        if resultat and resultat[-1].fin == f.debut and resultat[-1].attributs() == f.attributs():
-            resultat[-1].fin = f.fin
-        else:
-            resultat.append(f)
-    return resultat
+class _Conversion:
+    def __init__(self, precedents: list[Bloc]):
+        self.index: dict[str, Bloc] = {}
+        for bloc in precedents:
+            for p in [bloc, *bloc.textuels()]:
+                if p.source:
+                    self.index[p.source] = p
+        self.vus: set[str] = set()
+
+    def precedent(self, ident: str) -> Bloc:
+        if ident not in self.index:
+            raise RegleInvalide("Le document a changé entre-temps : rechargez la page.")
+        if ident in self.vus:
+            raise RegleInvalide("Un paragraphe apparaît deux fois : rechargez la page.")
+        self.vus.add(ident)
+        return self.index[ident]
+
+    def paragraphe(self, saisi: ParagrapheEdite) -> Bloc:
+        if saisi.id is None:
+            # Paragraphe ajouté : il reprend la mise en page et la police de son paragraphe d'origine
+            modele = self.index.get(saisi.origine or "")
+            if modele is None or modele.type != "paragraphe":
+                raise RegleInvalide("Paragraphe ajouté sans modèle : rechargez la page.")
+            nouveau = Bloc("paragraphe", origine=modele.source or modele.origine, rpr_base=modele.rpr_base)
+            _appliquer_segments(nouveau, saisi.segments)
+            return nouveau
+        precedent = self.precedent(saisi.id)
+        bloc = copy.deepcopy(precedent)
+        if not precedent.protege and not _memes_segments(saisi.segments, precedent):
+            _appliquer_segments(bloc, saisi.segments)  # police d'origine (rpr_base), mise en forme saisie
+        return bloc
+
+    def tableau(self, saisi: BlocEdite) -> Bloc:
+        tableau = copy.deepcopy(self.precedent(saisi.id or ""))
+        if tableau.type != "tableau":
+            raise RegleInvalide("Le document a changé entre-temps : rechargez la page.")
+        for ligne, ligne_saisie in zip(tableau.lignes, saisi.lignes):
+            for cellule, cellule_saisie in zip(ligne, ligne_saisie):
+                par_id = {p.id: p for p in cellule_saisie}
+                cellule.paragraphes = [
+                    self.paragraphe(par_id[p.source]) if p.source in par_id else self._garder(p)
+                    for p in cellule.paragraphes
+                ]
+        return tableau
+
+    def _garder(self, p: Bloc) -> Bloc:
+        self.vus.add(p.source)
+        return copy.deepcopy(p)
 
 
-def _decouper(texte: str, formats: list[Format], debut: int, fin: int) -> tuple[str, list[Format]] | None:
-    """Extrait [debut, fin) sans les espaces de bord ; None si la portion est vide."""
-    portion = texte[debut:fin]
-    debut += len(portion) - len(portion.lstrip())
-    fin -= len(portion) - len(portion.rstrip())
-    if debut >= fin:
-        return None
-    extrait = [
-        Format(max(f.debut, debut) - debut, min(f.fin, fin) - debut, *f.attributs())
-        for f in formats if f.fin > debut and f.debut < fin
-    ]
-    return texte[debut:fin], extrait
+def depuis_editeur(edition: Edition, precedents: list[Bloc]) -> list[Bloc]:
+    conversion = _Conversion(precedents)
+    blocs = [conversion.tableau(b) if b.type == "tableau" else conversion.paragraphe(b) for b in edition.blocs]
 
-
-def _cellule(segments: Segments) -> Bloc:
-    texte, formats = _texte_et_formats(segments)
-    texte = texte.replace("\n", " ")
-    morceau = _decouper(texte, formats, 0, len(texte))
-    if morceau is None:
-        return Bloc("paragraphe")
-    return Bloc("paragraphe", texte=morceau[0], original=morceau[0], formats=morceau[1])
-
-
-def depuis_editeur(edition: Edition) -> list[Bloc]:
-    """Blocs saisis → modèle interne. Une saisie sur plusieurs lignes (collage) donne
-    plusieurs blocs du même type ; les blocs vides sont ignorés."""
-    blocs: list[Bloc] = []
-    for b in edition.blocs:
-        if b.type == "tableau":
-            lignes = [[_cellule(c) for c in ligne[:30]] for ligne in b.lignes]
-            lignes = [ligne for ligne in lignes if ligne]
-            if lignes:
-                blocs.append(Bloc("tableau", lignes=lignes))
+    # Ce que l'éditeur ne permet pas de supprimer doit toujours être là
+    for bloc in precedents:
+        if bloc.source in conversion.vus:
             continue
-        texte, formats = _texte_et_formats(b.segments)
-        debut = 0
-        for ligne in texte.split("\n"):
-            morceau = _decouper(texte, formats, debut, debut + len(ligne))
-            debut += len(ligne) + 1
-            if morceau:
-                blocs.append(Bloc(b.type, texte=morceau[0], original=morceau[0], formats=morceau[1],
-                                  numerote=b.numerote and b.type == "liste"))
+        if bloc.type == "tableau":
+            raise RegleInvalide("Un tableau a disparu : rechargez la page.")
+        if bloc.protege or bloc.fin_section:
+            raise RegleInvalide("Un paragraphe protégé a disparu : rechargez la page.")
+    if not any(p.texte.strip() for b in blocs for p in b.textuels()):
+        raise RegleInvalide("Le document est vide : ajoutez du texte avant d'enregistrer.")
     return blocs
 
 
 # ---- Remplacements dans un document retouché -------------------------------------------
 
 def remplacer_mots(blocs: list[Bloc], remplacements: dict[str, str]) -> list[Bloc]:
-    """Remplace des mots entiers (casse conservée), segment par segment pour garder la mise
-    en forme. Un mot à cheval sur deux mises en forme n'est pas remplacé."""
+    """Remplace des mots entiers (casse et mise en forme conservées)."""
     if not remplacements:
         return blocs
     nettoyeur = Nettoyeur(Regles(corrections=remplacements))
     blocs = copy.deepcopy(blocs)
     for bloc in blocs:
-        for b in bloc.textuels():
-            segments = [
-                Segment(texte=nettoyeur.corriger(t.texte, []), gras=t.gras, italique=t.italique, souligne=t.souligne)
-                for t in Bloc("paragraphe", texte=b.texte, formats=b.formats).troncons()
-            ]
-            b.texte, b.formats = _texte_et_formats(segments)
+        for p in bloc.textuels():
+            if not p.protege:
+                texte = TexteStyle(p)
+                nettoyeur.corriger(texte, [])
+                texte.appliquer(p)
     return blocs

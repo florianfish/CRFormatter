@@ -35,12 +35,14 @@ def diff_html(avant: str, apres: str) -> str:
 
 
 def _texte_html(bloc: Bloc, avec_diff: bool) -> str:
-    if avec_diff and not bloc.inconnus and not bloc.formats:
+    if bloc.protege:
+        return _visible(bloc.texte)
+    if avec_diff and bloc.texte != bloc.original and not bloc.inconnus:
         return diff_html(bloc.original, bloc.texte)
-    # Texte final avec sa mise en forme et ses mots inconnus annotés
+    # Texte avec sa mise en forme et ses mots inconnus annotés
     morceaux = []
     for t in bloc.troncons():
-        html = _visible(t.texte)
+        html = _visible(t.texte).replace("\n", "<br>")
         if t.inconnu is not None:
             sugg = ", ".join(t.inconnu.suggestions) or "aucune suggestion"
             html = f'<mark class="inconnu" title="Suggestions : {escape(sugg)}">{html}</mark>'
@@ -51,36 +53,31 @@ def _texte_html(bloc: Bloc, avec_diff: bool) -> str:
     return "".join(morceaux)
 
 
-def rendre_blocs(blocs: list[Bloc], avec_diff: bool = True) -> Markup:
-    html: list[str] = []
-    liste_ouverte: str | None = None
-    for bloc in blocs:
-        balise_liste = ("ol" if bloc.numerote else "ul") if bloc.type == "liste" else None
-        if liste_ouverte and liste_ouverte != balise_liste:
-            html.append(f"</{liste_ouverte}>")
-            liste_ouverte = None
-        if balise_liste and not liste_ouverte:
-            html.append(f"<{balise_liste}>")
-            liste_ouverte = balise_liste
+def _paragraphe_html(p: Bloc, avec_diff: bool) -> str:
+    classe = ' class="protege" title="Contient un lien ou un champ automatique : laissé tel quel"' if p.protege else ""
+    return f"<p{classe}>{_texte_html(p, avec_diff)}</p>"
 
-        if bloc.type == "titre":
-            titre = escape(bloc.texte)
-            origine = (
-                f' <span class="origine" title="Texte d\'origine">← {escape(bloc.original)}</span>'
-                if avec_diff and bloc.original.strip().rstrip(": ").lower() != bloc.texte.lower()
-                else ""
-            )
-            html.append(f"<h3>{titre}{origine}</h3>")
-        elif bloc.type == "liste":
-            html.append(f"<li>{_texte_html(bloc, avec_diff)}</li>")
-        elif bloc.type == "tableau":
+
+def rendre_blocs(blocs: list[Bloc], avec_diff: bool = True) -> Markup:
+    """Aperçu du corps du document (les lignes vides successives sont regroupées)."""
+    html: list[str] = []
+    ligne_vide = False
+    for bloc in blocs:
+        if bloc.type == "tableau":
             lignes = "".join(
-                "<tr>" + "".join(f"<td>{_texte_html(c, avec_diff)}</td>" for c in ligne) + "</tr>"
+                "<tr>" + "".join(
+                    "<td>" + "".join(_paragraphe_html(p, avec_diff) for p in cellule.paragraphes) + "</td>"
+                    for cellule in ligne
+                ) + "</tr>"
                 for ligne in bloc.lignes
             )
             html.append(f"<table>{lignes}</table>")
+            ligne_vide = False
+        elif not bloc.texte.strip():
+            if not ligne_vide:
+                html.append('<p class="ligne-vide"></p>')
+            ligne_vide = True
         else:
-            html.append(f"<p>{_texte_html(bloc, avec_diff)}</p>")
-    if liste_ouverte:
-        html.append(f"</{liste_ouverte}>")
+            html.append(_paragraphe_html(bloc, avec_diff))
+            ligne_vide = False
     return Markup("\n".join(html))

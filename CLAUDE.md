@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Add-on Home Assistant (aarch64 Khadas + amd64) qui reformate des comptes rendus médicaux .docx
-**sans IA** : règles regex éditables, Hunspell, modèle Word. Interface servie via Ingress HA,
+**sans IA** : règles regex éditables, Hunspell, correction sur place. Interface servie via Ingress HA,
 HA étant exposé derrière un proxy nginx.
 
 ## Commandes
@@ -19,8 +19,18 @@ Un seul test : `cd docformatter && ../.venv/bin/pytest tests/test_pipeline.py -k
 
 ## Architecture
 
-Le traitement d'un document : `reader` (docx → `Bloc`) → `sections` (titres, puces) → `cleaner`
-(regex, corrections, majuscules) → `spelling` (Hunspell) → `writer` (blocs → docx depuis le modèle).
+Le traitement d'un document : `reader` (docx → `Bloc`) → `sections` (renommage des rubriques) →
+`cleaner` (regex, corrections, majuscules) → `spelling` (Hunspell) → `writer` (réécriture sur place).
+
+**Le document d'origine n'est jamais reconstruit** (exigence : en-têtes / pieds de page de chaque
+page et mise en page conservés). Chaque `Bloc` porte l'identifiant (`source`) de son élément Word
+(`p12`, `t3`, `t3.0.1.0` pour un paragraphe de cellule, cf. `reader.indexer`) ; `writer.ecrire_docx`
+rouvre l'original, ne réécrit que les paragraphes `modifie()` ou annotés (les autres restent
+identiques à l'octet), puis reconstruit l'ordre du corps (paragraphes ajoutés / supprimés /
+déplacés dans l'éditeur). Paragraphe contenant lien, champ, image, révision… → `protege` : jamais
+réécrit. Paragraphe portant un `sectPr` → `fin_section` : ni supprimé ni fusionné.
+Le texte est manipulé avec sa mise en forme via `TexteStyle` (positions par caractère) ;
+`Format.rpr` garde les propriétés Word d'origine (police, taille…).
 Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode expert passe par
 `traiter_texte`, sans docx.
 
@@ -48,7 +58,7 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
   Historique. Aucun jargon (pas de « regex », « YAML », « casse »), messages d'erreur en langage courant,
   enregistrement immédiat et bouton « Annuler » après chaque action.
 - **Le mode expert** (accessible à tous, séparé pour ne pas encombrer) : règles regex, testeur,
-  modèle Word, import/export. Le nom, la description et l'exemple d'une règle regex sont affichés
+  import/export. Le nom, la description et l'exemple d'une règle regex sont affichés
   sur la page « Mise en forme » : les rédiger sans jargon.
 
 ## Règles métier à respecter
@@ -84,8 +94,10 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
 - Hunspell fr compte « . » parmi les caractères de mot (« dispnée. ») : le mot est nettoyé dans
   `spelling._analyser`. Le mot est relocalisé dans le texte avec `find` plutôt qu'avec l'offset Hunspell.
 - Une clé YAML qui contient `: ` doit être entre guillemets (ex. `'Espace insécable avant : ; ! ?'`).
-- Styles Word recherchés par leur nom anglais (`Heading 1`, `List Bullet`…) ; si un style manque dans
-  le modèle, on utilise un style de repli.
+- Ne jamais ajouter de vrai document de patient au dépôt (public) : `.gitignore` exclut les `.docx`
+  à la racine ; les tests utilisent `tests/fabrique.py` (courrier fictif de même structure).
+- Vérification visuelle : convertir en PDF avec LibreOffice (image Docker locale, voir l'historique
+  du projet) et comparer les pages de l'original et du résultat.
 
 ## Conventions
 

@@ -51,8 +51,6 @@ class Remplacement(BaseModel):
 LIBELLES_OPTIONS = {
     "majuscule_debut": ("Majuscule en début de paragraphe", "patient stable", "Patient stable"),
     "point_final": ("Point à la fin des paragraphes", "Patient stable ce jour", "Patient stable ce jour."),
-    "detecter_titres": ("Reconnaître les titres écrits en MAJUSCULES ou suivis de «\u00a0:\u00a0»",
-                        "EVOLUTION DANS LE SERVICE", "Evolution dans le service (en titre)"),
     "verifier_orthographe": ("Signaler les mots inconnus", "dispnée", "dispnée (surligné en jaune)"),
     "commentaires_orthographe": ("Proposer des corrections en commentaire dans Word", "dispnée",
                                  "commentaire « Suggestions : dyspnée »"),
@@ -62,7 +60,6 @@ LIBELLES_OPTIONS = {
 class Options(BaseModel):
     majuscule_debut: bool = True
     point_final: bool = False
-    detecter_titres: bool = True
     verifier_orthographe: bool = True
     commentaires_orthographe: bool = True
 

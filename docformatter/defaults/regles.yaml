@@ -5,7 +5,6 @@
 options:
   majuscule_debut: true          # majuscule au premier mot d'un paragraphe ou d'une puce
   point_final: false             # ajoute un point aux paragraphes de 4 mots ou plus
-  detecter_titres: true          # lignes courtes en MAJUSCULES, en gras ou finissant par « : » → titre
   verifier_orthographe: true     # Hunspell fr_FR + dictionnaire ci-dessous
   commentaires_orthographe: true # commentaire Word avec suggestions sur chaque mot inconnu
 
@@ -39,6 +38,11 @@ remplacements:
     motif: '(\d)[ \u00a0]*(mg|µg|mcg|ng|g|kg|mL|L|cm|mm|mmol|µmol|UI|mmHg|bpm|%)(?![\w])'
     remplacement: '\1{nbsp}\2'
     exemple: 'Kardégic 75mg, poids 72kg, SpO2 98%'
+  - nom: Espace après les deux-points
+    description: 'Ajoute l''espace manquante après « : » quand un mot suit directement'
+    motif: ':(?=[^\W\d_])'
+    remplacement: ': '
+    exemple: 'Motif:douleur thoracique'
   - nom: 'Espaces avant : ; ! ?'
     description: 'Ajoute l''espace avant : ; ! ? comme le veut la typographie française'
     motif: '(?<=\S)[ \u00a0]*([:;!?])(?=\s|$)'

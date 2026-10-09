@@ -1,7 +1,7 @@
 """Application web (servie via Ingress Home Assistant).
 
 Tout utilisateur HA ayant accès au panneau a accès à tout : l'authentification est celle de HA.
-Le mode expert (regex, testeur, modèle Word, import/export) est séparé pour ne pas encombrer
+Le mode expert (regex, testeur, import/export) est séparé pour ne pas encombrer
 les pages du quotidien, pas pour des raisons de droits.
 """
 
@@ -35,7 +35,6 @@ from .auth import COOKIE, DUREE_SESSION, Limiteur, Sessions, charger_cle
 from .pipeline import finaliser_retouche, formater, traiter_texte
 from .pipeline.model import Bloc
 from .pipeline.spelling import Correcteur, charger_mots
-from .pipeline.writer import modele_par_defaut, valider_modele
 from .retouche import Edition, depuis_editeur, remplacer_mots, vers_editeur
 from .rules import LIBELLES_OPTIONS, Regles, Remplacement, ecrire_yaml, lire_yaml
 from .settings import APP_DIR, INGRESS_PROXY_IP, Settings
@@ -144,12 +143,9 @@ def creer_app(settings: Settings) -> FastAPI:
     def correcteur(regles: Regles) -> Correcteur:
         return Correcteur(charger_mots(regles.dictionnaire, settings.dictionnaires_dir))
 
-    def modele() -> bytes | None:
-        return settings.modele_path.read_bytes() if settings.modele_path.exists() else None
-
     def formater_octets(data: bytes) -> bytes:
         regles = store.get()
-        return formater(data, regles, modele(), correcteur(regles)).docx
+        return formater(data, regles, correcteur(regles)).docx
 
     # ---- Sécurité ---------------------------------------------------------------------
 
@@ -291,12 +287,12 @@ def creer_app(settings: Settings) -> FastAPI:
         """Formate (ou reformate si les règles ont changé) tous les documents du lot.
 
         Un document retouché à la main n'est pas reformaté : seules l'orthographe et la
-        mise en page (modèle Word) sont recalculées, les saisies sont conservées telles quelles.
+        réécriture du document sont recalculées, les saisies sont conservées telles quelles.
         """
         if lot.rendu and lot.version_regles == store.version:
             return lot.rendu
         regles = store.get()
-        corr, mod = correcteur(regles), modele()
+        corr = correcteur(regles)
         resultats, sorties = [], []
         inconnus: Counter = Counter()
         suggestions: dict[str, list[str]] = {}
@@ -305,9 +301,9 @@ def creer_app(settings: Settings) -> FastAPI:
             entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches}
             try:
                 if i in lot.retouches:
-                    res = finaliser_retouche(copy.deepcopy(lot.retouches[i]), regles, mod, corr)
+                    res = finaliser_retouche(data, copy.deepcopy(lot.retouches[i]), regles, corr)
                 else:
-                    res = formater(data, regles, mod, corr)
+                    res = formater(data, regles, corr)
             except Exception:  # noqa: BLE001
                 log.exception("Échec du traitement de %s", nom)
                 entree["erreur"] = "Ce document n'a pas pu être lu. Est-ce bien un fichier Word valide ?"
@@ -414,12 +410,15 @@ def creer_app(settings: Settings) -> FastAPI:
             "telechargement": lot.telechargements[n],
         }
 
+    @app.get("/api/lot/{cle}/document/{n}")
+    def lire_retouche(request: Request, cle: str, n: int):
+        lot = lire_document(request, cle, n)
+        return {"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)}
+
     @app.put("/api/lot/{cle}/document/{n}")
     def enregistrer_retouche(request: Request, cle: str, n: int, edition: Edition):
         lot = lire_document(request, cle, n)
-        blocs = depuis_editeur(edition)
-        if not blocs:
-            raise RegleInvalide("Le document est vide : ajoutez du texte avant d'enregistrer.")
+        blocs = depuis_editeur(edition, lot.blocs[n])
         lot.retouches[n] = blocs
         lot.rendu = {}  # force le recalcul (orthographe, .docx) de ce document
         rendre_lot(lot, request.state.utilisateur)
@@ -534,7 +533,7 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.get("/expert", response_class=HTMLResponse)
     def page_expert(request: Request):
-        return page(request, "expert.html", actif="expert", modele_perso=settings.modele_path.exists(),
+        return page(request, "expert.html", actif="expert",
                     dictionnaires=sorted(p.name for p in settings.dictionnaires_dir.iterdir()))
 
     @app.get("/expert/api/remplacements")
@@ -594,26 +593,6 @@ def creer_app(settings: Settings) -> FastAPI:
         except Exception as e:  # noqa: BLE001 — YAML ou encodage invalide
             return JSONResponse({"erreur": f"Fichier invalide : {e}"}, status_code=422)
         store.remplacer(regles, request.state.utilisateur, f"Import du fichier « {fichier.filename} » (mode expert)")
-        return {"ok": True}
-
-    @app.get("/expert/modele")
-    def telecharger_modele(request: Request):
-        return Response(modele() or modele_par_defaut(), media_type=MIME_DOCX,
-                        headers={"Content-Disposition": _content_disposition("modele.docx")})
-
-    @app.post("/expert/modele")
-    def deposer_modele(request: Request, fichier: UploadFile = File(...)):
-        data = fichier.file.read(TAILLE_MAX)
-        try:
-            valider_modele(data)
-        except Exception as e:  # noqa: BLE001
-            return JSONResponse({"erreur": f"Modèle inutilisable : {e}"}, status_code=422)
-        settings.modele_path.write_bytes(data)
-        return {"ok": True}
-
-    @app.delete("/expert/modele")
-    def supprimer_modele(request: Request):
-        settings.modele_path.unlink(missing_ok=True)
         return {"ok": True}
 
     # ---- Dossier surveillé ------------------------------------------------------------

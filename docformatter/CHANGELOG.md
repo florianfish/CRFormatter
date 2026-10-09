@@ -1,3 +1,13 @@
+## 0.6.0
+
+- **Correction sur place** : le document d'origine est conservé (en-têtes et pieds de page de chaque
+  page, marges, colonnes, styles, liens, champs) ; seul le texte des paragraphes est corrigé.
+- Les rubriques sont renommées sur place (« ATCD : » → « Antécédents : ») en gardant leur mise en forme.
+- L'éditeur de retouche travaille sur les paragraphes du document réel ; les paragraphes contenant
+  un lien ou un champ automatique sont protégés.
+- Suppression du « modèle Word » (devenu inutile) et de l'option « Détecter les titres ».
+- Nouvelle règle « Espace après les deux-points » ; correction des mots collés à un tiret de liste.
+
 ## 0.5.0
 
 - Accès direct facultatif sans passer par Home Assistant (ex. sous-domaine via nginx, port 8099),

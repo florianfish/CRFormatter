@@ -3,7 +3,7 @@
 En production (add-on Home Assistant) :
 - /data/options.json : options saisies dans l'onglet « Configuration » de l'add-on ;
 - /data              : données privées de l'add-on (clé de signature des sessions) ;
-- /config            : dossier persistant de l'add-on (règles, modèle Word, sauvegardes) ;
+- /config            : dossier persistant de l'add-on (règles, historique, dictionnaires) ;
 - /share/docformatter: dossier surveillé, accessible via le partage Samba de HA.
 
 En développement, ces chemins sont surchargés par des variables d'environnement
@@ -50,10 +50,6 @@ class Settings:
     @property
     def historique_dir(self) -> Path:
         return self.config_dir / "historique"
-
-    @property
-    def modele_path(self) -> Path:
-        return self.config_dir / "modele.docx"
 
     @property
     def cle_sessions_path(self) -> Path:

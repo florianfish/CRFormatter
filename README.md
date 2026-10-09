@@ -39,7 +39,7 @@ make run SURVEILLE=1                    # dossier surveillé dev-data/share/entr
 make run PORT=8100
 ```
 
-Les règles, le modèle et l'historique de développement sont dans `dev-data/config/`
+Les règles et l'historique de développement sont dans `dev-data/config/`
 (ignoré par git) ; supprimer `dev-data/config/regles.yaml` repart des règles par défaut.
 
 En mode développement, l'authentification est désactivée et le serveur n'écoute que sur
@@ -53,11 +53,11 @@ docformatter/
 ├── defaults/regles.yaml                  règles copiées au premier démarrage
 └── app/
     ├── pipeline/
-    │   ├── reader.py     .docx → blocs (paragraphes, tableaux)
-    │   ├── sections.py   titres de section, listes à puces
+    │   ├── reader.py     .docx → blocs reliés à leurs paragraphes Word (lien, champ → protégé)
+    │   ├── sections.py   renommage des rubriques sur place
     │   ├── cleaner.py    regex, corrections connues, majuscules
     │   ├── spelling.py   Hunspell (mode pipe), mots inconnus + suggestions
-    │   └── writer.py     blocs → .docx à partir du modèle Word
+    │   └── writer.py     réécriture sur place des seuls paragraphes modifiés
     ├── rules.py          modèle des règles (validation pydantic), lecture/écriture YAML
     ├── store.py          stockage des règles : historique, annulation, réparation d'un fichier invalide
     ├── vocabulaire.py    opérations simples de la secrétaire (mots, remplacements, rubriques…)

@@ -165,28 +165,6 @@ document.getElementById("import").addEventListener("change", async (e) => {
   }
 });
 
-document.getElementById("modele").addEventListener("change", async (e) => {
-  const fichier = e.target.files[0];
-  e.target.value = "";
-  if (!fichier) return;
-  const fd = new FormData();
-  fd.append("fichier", fichier);
-  try {
-    await api("POST", "expert/modele", fd);
-    document.getElementById("modele-actuel").textContent = "personnalisé";
-    notifier("Modèle enregistré.");
-  } catch (err) {
-    notifier(err.message, { type: "erreur" });
-  }
-});
-
-document.getElementById("modele-defaut").addEventListener("click", async () => {
-  if (!confirm("Supprimer le modèle personnalisé et revenir au modèle par défaut ?")) return;
-  await api("DELETE", "expert/modele");
-  document.getElementById("modele-actuel").textContent = "par défaut";
-  notifier("Modèle par défaut rétabli.");
-});
-
 window.addEventListener("beforeunload", (e) => {
   if (reference !== null && majEtat()) e.preventDefault();
 });

@@ -14,41 +14,23 @@
   </div>
 </div>
 <p class="aide">
-  Cliquez dans le texte pour le modifier, comme dans Word. Sélectionnez des mots puis utilisez
-  <strong>G</strong>, <em>I</em> ou <u>S</u> pour le gras, l'italique ou le souligné. <kbd>Entrée</kbd> crée un nouveau paragraphe,
-  <kbd>Retour arrière</kbd> au début d'un paragraphe le rattache au précédent.
-  Les corrections automatiques ne sont pas réappliquées sur vos retouches.
+  Cliquez dans le texte pour le modifier. Sélectionnez des mots puis utilisez <strong>G</strong>, <em>I</em> ou
+  <u>S</u> pour le gras, l'italique ou le souligné. <kbd>Entrée</kbd> crée un nouveau paragraphe,
+  <kbd>Maj</kbd>+<kbd>Entrée</kbd> un retour à la ligne, <kbd>Retour arrière</kbd> au début d'un paragraphe le
+  rattache au précédent. En-têtes, pieds de page et mise en page du document d'origine sont conservés.
 </p>
 
 <div class="espace-retouche">
   <div class="editeur">
-    <div class="barre-outils" role="toolbar" aria-label="Mise en forme du paragraphe sélectionné">
-      <label>Type
-        <select id="type-bloc" disabled>
-          <option value="" hidden>—</option>
-          <option value="titre">Titre</option>
-          <option value="paragraphe">Paragraphe</option>
-          <option value="puce">Liste à puces</option>
-          <option value="numero">Liste numérotée</option>
-        </select>
-      </label>
-      <span class="separateur" aria-hidden="true"></span>
+    <div class="barre-outils" role="toolbar" aria-label="Mise en forme">
       <button type="button" data-action="gras" class="style-gras" title="Gras (Ctrl+B)" aria-label="Gras" aria-pressed="false" disabled>G</button>
       <button type="button" data-action="italique" class="style-italique" title="Italique (Ctrl+I)" aria-label="Italique" aria-pressed="false" disabled>I</button>
       <button type="button" data-action="souligne" class="style-souligne" title="Souligné (Ctrl+U)" aria-label="Souligné" aria-pressed="false" disabled>S</button>
       <span class="separateur" aria-hidden="true"></span>
       <button type="button" data-action="monter" title="Monter le paragraphe" disabled>↑</button>
       <button type="button" data-action="descendre" title="Descendre le paragraphe" disabled>↓</button>
-      <button type="button" data-action="supprimer" class="danger" disabled>Supprimer</button>
-      <span class="separateur" aria-hidden="true"></span>
-      <button type="button" data-action="ajouter-paragraphe">+ Paragraphe</button>
-      <button type="button" data-action="ajouter-tableau">+ Tableau</button>
-      <span class="outils-tableau" hidden>
-        <button type="button" data-action="ajouter-ligne">+ Ligne</button>
-        <button type="button" data-action="supprimer-ligne">− Ligne</button>
-        <button type="button" data-action="ajouter-colonne">+ Colonne</button>
-        <button type="button" data-action="supprimer-colonne">− Colonne</button>
-      </span>
+      <button type="button" data-action="supprimer" class="danger" disabled>Supprimer le paragraphe</button>
+      <button type="button" data-action="ajouter-paragraphe" disabled>+ Paragraphe</button>
       <span class="separateur" aria-hidden="true"></span>
       <button type="button" data-action="annuler" title="Annuler la dernière action (Ctrl+Z dans le texte annule la frappe)" disabled>↶ Annuler</button>
     </div>

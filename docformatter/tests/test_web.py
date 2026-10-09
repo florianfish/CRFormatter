@@ -43,6 +43,12 @@ def client(app, utilisateur="secretaire", ip=INGRESS_PROXY_IP):
     return c
 
 
+def texte_docx(c, page) -> list[str]:
+    """Paragraphes du premier document téléchargeable de la page de résultat."""
+    lien = page.text.split('href="telecharger/')[1].split('"')[0]
+    return [p.text for p in Document(io.BytesIO(c.get(f"/telecharger/{lien}").content)).paragraphs]
+
+
 def formater(c, *paragraphes, nom="cr.docx"):
     r = c.post("/formater", files={"fichiers": (nom, _docx(*paragraphes), DOCX)})
     assert r.status_code == 303 and r.headers["location"].startswith(f"{BASE}/lot/")
@@ -179,7 +185,7 @@ def test_rubriques(app):
     assert c.post("/api/vocabulaire/rubrique", json={"titre": "Évolution"}).status_code == 200
     assert c.post("/api/vocabulaire/variante", json={"titre": "Évolution", "variante": "evol"}).status_code == 200
     _, page = formater(c, "EVOL : favorable")
-    assert "<h3>Évolution" in page.text
+    assert "Évolution\u00a0: favorable" in texte_docx(c, page)
     r = c.request("DELETE", "/api/vocabulaire/variante", json={"titre": "Évolution", "variante": "evol"})
     rubrique = next(x for x in r.json()["vocabulaire"]["rubriques"] if x["titre"] == "Évolution")
     assert rubrique["variantes"] == []
@@ -229,7 +235,7 @@ def test_expert_regex_invalide(app):
 def test_expert_tester(app):
     c = client(app, utilisateur="autre")
     r = c.post("/expert/api/tester-regle", json={"motif": r"(\d)mg", "remplacement": r"\1{nbsp}mg", "exemple": "5mg"})
-    assert r.json()["resultat"] == "5 mg"
+    assert r.json()["resultat"] == "5\u00a0mg"
     r = c.post("/expert/api/tester-regle", json={"motif": "a", "remplacement": r"\2", "exemple": "a"})
     assert "remplacement invalide" in r.json()["erreur"]
     r = c.post("/expert/api/tester", json={"remplacements": [{"nom": "x", "motif": "stable", "remplacement": "STABLE"}],
@@ -247,13 +253,6 @@ def test_import_export(app):
     assert r.status_code == 422
 
 
-def test_modele(app, settings):
-    c = client(app, utilisateur="autre")
-    assert c.post("/expert/modele", files={"fichier": ("m.docx", b"nope", DOCX)}).status_code == 422
-    assert c.post("/expert/modele", files={"fichier": ("m.docx", _docx("contenu ignoré"), DOCX)}).status_code == 200
-    assert settings.modele_path.exists()
-    assert c.delete("/expert/modele").status_code == 200
-    assert not settings.modele_path.exists()
 
 
 def test_alerte_fichier_abime(settings):
@@ -290,8 +289,8 @@ def test_dossier_surveille(tmp_path):
 
 # ---- Retouche manuelle ----------------------------------------------------------------
 
-def _texte_docx(contenu: bytes) -> list[str]:
-    return [p.text for p in Document(io.BytesIO(contenu)).paragraphs if p.text]
+def seg(texte, **mise_en_forme):
+    return {"texte": texte, **mise_en_forme}
 
 
 def sans_surlignage(html: str) -> str:
@@ -299,67 +298,53 @@ def sans_surlignage(html: str) -> str:
     return re.sub(r"<mark[^>]*>|</mark>", "", html)
 
 
-def seg(texte, **mise_en_forme):
-    return {"texte": texte, **mise_en_forme}
-
-
-def paragraphe(*segments, type_="paragraphe", **autres):
-    return {"type": type_, "segments": [s if isinstance(s, dict) else seg(s) for s in segments], **autres}
+def editeur(c, cle, n=0):
+    return c.get(f"/api/lot/{cle}/document/{n}").json()
 
 
 def textes(blocs):
-    return ["".join(s["texte"] for s in b["segments"]) for b in blocs if b["type"] != "tableau"]
+    return ["".join(s["texte"] for s in b["segments"]) for b in blocs if b["type"] == "paragraphe"]
 
 
 def test_retouche_page_et_enregistrement(app):
     c = client(app)
     cle, page = formater(c, "ATCD : HTA", "patient stable")
     assert f'href="lot/{cle}/document/0"' in page.text
+    assert c.get(f"/lot/{cle}/document/0").status_code == 200
 
-    editeur = c.get(f"/lot/{cle}/document/0")
-    assert editeur.status_code == 200 and "\"HTA\"" in editeur.text
-
-    blocs = [
-        paragraphe("Antécédents", type_="titre"),
-        paragraphe("HTA traitée", type_="liste", numerote=True),
-        paragraphe("ttt  à revoir\nDeuxième ligne collée"),
-        paragraphe("   "),
-        {"type": "tableau", "lignes": [[[seg("Hb")], [seg("12 g/dL")]]]},
-    ]
+    donnees = editeur(c, cle)
+    blocs = donnees["blocs"]
+    assert textes(blocs) == ["Antécédents\u00a0: HTA", "Patient stable"]
+    blocs[1]["segments"] = [seg("ttt  à revoir")]
+    blocs.append({"type": "paragraphe", "id": None, "origine": blocs[1]["id"], "segments": [seg("Ajout")]})
     r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     assert r.status_code == 200
-    renvoye = r.json()["blocs"]
-    # Pas de règle automatique (« ttt » reste), espaces doubles réduites, collage découpé, vide ignoré
-    assert textes(renvoye) == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
-    assert renvoye[1]["numerote"] and renvoye[4]["lignes"][0][1][0]["texte"] == "12 g/dL"
+    # Pas de règle automatique sur la saisie (« ttt » et l'espace double restent)
+    assert textes(r.json()["blocs"]) == ["Antécédents\u00a0: HTA", "ttt  à revoir", "Ajout"]
 
     fichier = c.get(f"/telecharger/{r.json()['telechargement']}")
-    assert _texte_docx(fichier.content) == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
-
+    paragraphes = [p.text for p in Document(io.BytesIO(fichier.content)).paragraphs]
+    assert paragraphes == ["Antécédents\u00a0: HTA", "ttt  à revoir", "Ajout"]
     resultat = sans_surlignage(c.get(f"/lot/{cle}").text)
-    assert "retouché à la main" in resultat and "ttt à revoir" in resultat
+    assert "retouché à la main" in resultat and "ttt  à revoir" in resultat
 
 
 def test_retouche_gras_italique_souligne(app):
     c = client(app)
     cle, _ = formater(c, "texte")
-    blocs = [
-        paragraphe("Pression ", seg("très élevée", gras=True), " à ", seg("surveiller", italique=True, souligne=True), "."),
-        {"type": "tableau", "lignes": [[[seg("K+", gras=True)], [seg("5,8 mmol/L")]]]},
-    ]
+    blocs = editeur(c, cle)["blocs"]
+    blocs[0]["segments"] = [seg("Pression "), seg("très élevée", gras=True), seg(" à "),
+                            seg("surveiller", italique=True, souligne=True), seg(".")]
     r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     segments = r.json()["blocs"][0]["segments"]
     assert [(s["texte"], s["gras"], s["italique"], s["souligne"]) for s in segments] == [
         ("Pression ", False, False, False), ("très élevée", True, False, False), (" à ", False, False, False),
         ("surveiller", False, True, True), (".", False, False, False),
     ]
-
     doc = Document(io.BytesIO(c.get(f"/telecharger/{r.json()['telechargement']}").content))
     runs = [(run.text, bool(run.bold), bool(run.italic), bool(run.underline)) for run in doc.paragraphs[0].runs]
     assert runs == [("Pression ", False, False, False), ("très élevée", True, False, False),
                     (" à ", False, False, False), ("surveiller", False, True, True), (".", False, False, False)]
-    assert doc.tables[0].cell(0, 0).paragraphs[0].runs[0].bold
-
     apercu = sans_surlignage(c.get(f"/lot/{cle}").text)
     assert "<strong>très élevée</strong>" in apercu and "<em><u>surveiller</u></em>" in apercu
 
@@ -367,7 +352,9 @@ def test_retouche_gras_italique_souligne(app):
 def test_retouche_conservee_apres_ajout_de_vocabulaire(app):
     c = client(app)
     cle, _ = formater(c, "texte d'origine")
-    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("ttt ", seg("retouché", gras=True))]})
+    blocs = editeur(c, cle)["blocs"]
+    blocs[0]["segments"] = [seg("ttt "), seg("retouché", gras=True)]
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     # Une nouvelle règle ne réécrit pas la retouche…
     c.post("/api/vocabulaire/remplacement", json={"texte": "ttt", "par": "traitement"})
     assert "ttt <strong>retouché</strong>" in sans_surlignage(c.get(f"/lot/{cle}").text)
@@ -379,7 +366,9 @@ def test_retouche_conservee_apres_ajout_de_vocabulaire(app):
 def test_abandon_retouche(app):
     c = client(app)
     cle, _ = formater(c, "patient stable")
-    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("autre chose")]})
+    blocs = editeur(c, cle)["blocs"]
+    blocs[0]["segments"] = [seg("autre chose")]
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     r = c.delete(f"/api/lot/{cle}/document/0")
     assert textes(r.json()["blocs"]) == ["Patient stable"]
     assert "retouché à la main" not in c.get(f"/lot/{cle}").text
@@ -388,9 +377,13 @@ def test_abandon_retouche(app):
 def test_retouche_refusee(app):
     c = client(app)
     cle, _ = formater(c, "patient stable")
-    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("  ")]})
+    blocs = editeur(c, cle)["blocs"]
+    blocs[0]["segments"] = [seg("  ")]
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     assert r.status_code == 422 and "vide" in r.json()["erreur"]
-    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script", "segments": []}]}).status_code == 422
+    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script"}]}).status_code == 422
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "id": "p42", "segments": []}]})
+    assert r.status_code == 422 and "rechargez" in r.json()["erreur"]
     assert c.get(f"/lot/{cle}/document/5").status_code == 404
     assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404
 

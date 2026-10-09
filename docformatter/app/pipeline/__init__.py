@@ -1,4 +1,4 @@
-"""Chaîne de traitement : lecture → structure → nettoyage → orthographe → écriture."""
+"""Chaîne de traitement : lecture → rubriques → nettoyage → orthographe → écriture sur place."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ..rules import Regles
 from .cleaner import nettoyer_blocs
 from .model import Bloc, Changement
 from .reader import lire_docx
-from .sections import structurer
+from .sections import renommer_rubriques
 from .spelling import Correcteur
 from .writer import ecrire_docx
 
@@ -27,9 +27,9 @@ class Resultat:
 def _verifier(resultat: Resultat, regles: Regles, correcteur: Correcteur | None) -> None:
     if not (regles.options.verifier_orthographe and correcteur is not None and correcteur.disponible):
         return
-    textuels = [b for bloc in resultat.blocs for b in bloc.textuels() if bloc.type != "titre"]
-    for b, inconnus in zip(textuels, correcteur.verifier([b.texte for b in textuels])):
-        b.inconnus = inconnus
+    paragraphes = [p for bloc in resultat.blocs for p in bloc.textuels() if not p.protege]
+    for p, inconnus in zip(paragraphes, correcteur.verifier([p.texte for p in paragraphes])):
+        p.inconnus = inconnus
         for i in inconnus:
             resultat.inconnus[i.mot] += 1
             resultat.suggestions[i.mot] = i.suggestions
@@ -37,32 +37,30 @@ def _verifier(resultat: Resultat, regles: Regles, correcteur: Correcteur | None)
 
 
 def traiter_blocs(blocs: list[Bloc], regles: Regles, correcteur: Correcteur | None) -> Resultat:
-    blocs = structurer(blocs, regles.sections, regles.options.detecter_titres)
-    resultat = Resultat(blocs, nettoyer_blocs(blocs, regles))
+    changements: list[Changement] = []
+    renommer_rubriques(blocs, regles.sections, changements)
+    changements += nettoyer_blocs(blocs, regles)
+    resultat = Resultat(blocs, changements)
     _verifier(resultat, regles, correcteur)
     return resultat
 
 
-def formater(data: bytes, regles: Regles, modele: bytes | None, correcteur: Correcteur | None) -> Resultat:
+def formater(data: bytes, regles: Regles, correcteur: Correcteur | None) -> Resultat:
     resultat = traiter_blocs(lire_docx(data), regles, correcteur)
-    resultat.docx = ecrire_docx(
-        resultat.blocs, modele, commentaires=regles.options.commentaires_orthographe
-    )
+    resultat.docx = ecrire_docx(data, resultat.blocs, commentaires=regles.options.commentaires_orthographe)
     return resultat
 
 
-def finaliser_retouche(
-    blocs: list[Bloc], regles: Regles, modele: bytes | None, correcteur: Correcteur | None
-) -> Resultat:
+def finaliser_retouche(data: bytes, blocs: list[Bloc], regles: Regles, correcteur: Correcteur | None) -> Resultat:
     """Document retouché à la main : seulement l'orthographe et l'écriture, sans aucune règle
     automatique (les choix de la personne qui a retouché priment)."""
     for bloc in blocs:
-        for b in bloc.textuels():
-            b.inconnus = []
-            b.original = b.texte  # l'aperçu ne montre plus de différences
+        for p in bloc.textuels():
+            p.inconnus = []
+            p.original = p.texte  # l'aperçu ne montre plus de différences
     resultat = Resultat(blocs, [])
     _verifier(resultat, regles, correcteur)
-    resultat.docx = ecrire_docx(blocs, modele, commentaires=regles.options.commentaires_orthographe)
+    resultat.docx = ecrire_docx(data, blocs, commentaires=regles.options.commentaires_orthographe)
     return resultat
 
 

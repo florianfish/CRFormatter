@@ -5,14 +5,19 @@ tout le traitement a lieu sur votre serveur Home Assistant.
 
 ## Ce que fait l'outil
 
-1. **Structure** : reconnaît les titres de section (« ATCD : », « ttt habituel », « EXAMEN CLINIQUE »…)
-   et les remplace par un titre normalisé ; transforme les lignes « - … » en vraies listes à puces.
+Le document est corrigé **sur place** : en-têtes et pieds de page (y compris ceux de la première
+page), marges, colonnes, styles, alignements, liens et champs automatiques sont conservés à l'identique.
+Seul le texte des paragraphes du corps est corrigé.
+
+1. **Rubriques** : renomme les libellés de rubrique écrits autrement (« ATCD : » → « Antécédents : »,
+   « ttt habituel : » → « Traitement habituel : »), en gardant leur mise en forme (gras, souligné…).
 2. **Nettoyage** : espaces en trop, typographie française (espaces insécables, guillemets « »),
    unités (`75mg` → `75 mg`), majuscule en début de paragraphe… via des règles modifiables.
 3. **Corrections connues** : remplace automatiquement une liste de fautes fréquentes.
 4. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical. Les mots inconnus sont
    **surlignés en jaune avec un commentaire de suggestions, jamais corrigés automatiquement**.
-5. **Mise en page** : le document est réécrit à partir d'un modèle Word (styles, marges, en-tête, logo).
+
+Les paragraphes contenant un lien, un champ automatique ou une image sont laissés intacts.
 
 Les chiffres et posologies ne sont jamais modifiés, seulement espacés.
 
@@ -23,17 +28,16 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
 - **Formater** : déposer un ou plusieurs .docx, puis télécharger le résultat. Les mots inconnus
   sont listés en haut : pour chacun, choisir « Le mot est correct » ou « Remplacer par… », puis
   « Enregistrer mes choix et reformater ». L'outil s'en souviendra pour les prochains documents.
-- **Retoucher** (bouton sur chaque document du résultat) : modifier le texte déjà corrigé, comme
-  dans Word — gras, italique, souligné, changer un paragraphe en titre ou en liste, déplacer,
-  supprimer, ajouter des lignes à un tableau, remplacer un mot signalé. « Enregistrer » régénère le .docx avec le modèle Word.
-  Les corrections automatiques ne sont jamais réappliquées sur un document retouché.
+- **Retoucher** (bouton sur chaque document du résultat) : modifier le texte déjà corrigé — gras,
+  italique, souligné, ajouter, déplacer ou supprimer un paragraphe, remplacer un mot signalé.
+  L'éditeur montre le corps du document ; en-têtes, pieds de page et mise en page sont conservés
+  dans le .docx produit. Les corrections automatiques ne sont jamais réappliquées sur un document retouché.
 - **Vocabulaire** : remplacements automatiques (fautes, abréviations), mots connus, rubriques et
   leurs différentes écritures. Chaque modification est enregistrée immédiatement.
 - **Mise en forme** : interrupteurs pour activer ou désactiver chaque correction, avec un exemple.
 - **Historique** : toutes les modifications, avec leur date et leur auteur ; on peut revenir à
   n'importe quel état précédent. Chaque modification propose aussi un bouton « Annuler » immédiat.
-- **Expert** : création de règles avancées (expressions régulières),
-  testeur, modèle Word, import/export des règles.
+- **Expert** : création de règles avancées (expressions régulières), testeur, import/export des règles.
 
 ## Configuration
 
@@ -49,7 +53,6 @@ Dans `/addon_configs/<id>_docformatter/` (accessible avec l'add-on Samba ou File
 
 - `regles.yaml` : règles actuelles. Une modification manuelle est prise en compte sans redémarrage ;
 - `historique/` : les 100 dernières versions des règles (date, auteur, description) ;
-- `modele.docx` : modèle Word personnalisé (facultatif) ;
 - `dictionnaires/` : listes de mots supplémentaires (`.txt` ou `.dic`, un mot par ligne).
 
 Si `regles.yaml` devient invalide (par exemple après une modification manuelle ratée), l'outil
