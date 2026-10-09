@@ -11,6 +11,10 @@
 <body>
   <header class="barre">
     <a href="./" class="logo">DocFormatter</a>
+    {% if version %}
+    <button type="button" class="version" id="ouvrir-nouveautes" data-version="{{ version }}"
+            aria-haspopup="dialog" title="Nouveautés de cette version">v{{ version }}</button>
+    {% endif %}
     {% if not sans_menu %}
     <nav>
       <a href="./" {% if actif == "formater" %}aria-current="page"{% endif %}>Formater</a>
@@ -31,6 +35,15 @@
     {% block contenu %}{% endblock %}
   </main>
   <div id="notification" class="notification" role="status" hidden></div>
+  {% if version %}
+  <dialog id="nouveautes" class="fenetre" aria-labelledby="titre-nouveautes">
+    <div class="entete-carte">
+      <h2 id="titre-nouveautes">Nouveautés — version {{ version }}</h2>
+      <form method="dialog"><button type="submit" class="petit" aria-label="Fermer">Fermer</button></form>
+    </div>
+    <div class="journal">{{ nouveautes }}</div>
+  </dialog>
+  {% endif %}
   <script src="static/commun.js"></script>
   {% block scripts %}{% endblock %}
 </body>

@@ -5,6 +5,7 @@
   dans les champs « écrire » / « Remplacer par » (« dolip » → « Doliprane »). Interrupteur dans
   « Mise en forme ».
 - Suggestions d'orthographe tirées aussi du vocabulaire et des médicaments (« dolipranne » → « Doliprane »).
+- Numéro de version affiché en haut de l'écran : un clic montre les nouveautés de chaque version.
 
 ## 0.7.0
 

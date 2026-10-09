@@ -82,3 +82,22 @@ function proposerPendantLaFrappe(champ) {
     }, 150);
   });
 }
+
+// ---- Version et nouveautés ------------------------------------------------------------
+
+(() => {
+  const bouton = document.getElementById("ouvrir-nouveautes");
+  const fenetre = document.getElementById("nouveautes");
+  if (!bouton || !fenetre) return;
+  const CLE = "docformatter.version-vue";
+  const lire = () => { try { return localStorage.getItem(CLE); } catch { return null; } };
+  // Point discret tant que les nouveautés de cette version n'ont pas été consultées (sur ce navigateur)
+  bouton.classList.toggle("nouvelle", lire() !== bouton.dataset.version);
+  bouton.addEventListener("click", () => {
+    fenetre.showModal();
+    bouton.classList.remove("nouvelle");
+    try { localStorage.setItem(CLE, bouton.dataset.version); } catch { /* navigation privée */ }
+  });
+  // Clic à côté de la fenêtre : fermeture
+  fenetre.addEventListener("click", (e) => { if (e.target === fenetre) fenetre.close(); });
+})();

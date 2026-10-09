@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import re
+from pathlib import Path
 
 import pytest
 from docx import Document
@@ -236,6 +237,19 @@ def test_import_export(app):
     assert r.status_code == 422
 
 
+
+
+def test_version_et_nouveautes(app):
+    import yaml
+
+    from app.version import markdown_simple
+
+    version = yaml.safe_load(Path(__file__).resolve().parents[1].joinpath("config.yaml").read_text())["version"]
+    page = client(app).get("/").text
+    assert f">v{version}</button>" in page and 'id="nouveautes"' in page
+    assert f"<h3>{version}</h3>" in page  # CHANGELOG à jour avec la version publiée
+    assert markdown_simple("## 1.0\n- **Gras** <script>\n  suite `code`") == (
+        "<h3>1.0</h3>\n<ul>\n<li><strong>Gras</strong> &lt;script&gt; suite <code>code</code></li>\n</ul>")
 
 
 def test_alerte_fichier_abime(settings):

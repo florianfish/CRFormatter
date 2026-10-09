@@ -56,6 +56,24 @@ code, .code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
   padding: 10px 16px; background: var(--carte); border-bottom: 1px solid var(--bordure);
 }
 .barre .logo { font-weight: 700; color: var(--texte); text-decoration: none; }
+.barre .version {
+  position: relative; padding: 1px 8px; font-size: 0.8em; color: var(--discret);
+  background: none; border-radius: 999px;
+}
+.barre .version.nouvelle::after {
+  content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* Fenêtre des nouveautés */
+.fenetre {
+  width: min(680px, calc(100vw - 32px)); max-height: min(80vh, 760px); padding: 20px;
+  border: 1px solid var(--bordure); border-radius: var(--rayon); background: var(--carte); color: var(--texte);
+}
+.fenetre::backdrop { background: rgb(0 0 0 / 0.4); }
+.journal h3 { margin: 18px 0 6px; font-size: 1rem; }
+.journal ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+.journal code { font-size: 0.9em; }
 .barre nav { display: flex; gap: 16px; flex: 1; }
 .barre nav { flex-wrap: wrap; }
 .barre nav a { color: var(--discret); text-decoration: none; padding: 2px 0; border-bottom: 2px solid transparent; }

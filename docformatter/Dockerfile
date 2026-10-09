@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY defaults ./defaults
+# Version et nouveautés affichées dans l'interface (app/version.py)
+COPY config.yaml CHANGELOG.md ./
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8099

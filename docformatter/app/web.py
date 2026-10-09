@@ -27,6 +27,7 @@ from markupsafe import Markup
 from pydantic import BaseModel, ValidationError
 
 from . import medicaments
+from . import version as infos_version
 from . import vocabulaire as voc
 from .apercu import diff_html, rendre_blocs
 from .collage import Collage, docx_depuis_collage
@@ -125,6 +126,7 @@ def creer_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="DocFormatter", docs_url=None, redoc_url=None, openapi_url=None)
     templates = Jinja2Templates(directory=APP_DIR / "templates")
     templates.env.filters["diff"] = lambda c: Markup(diff_html(c.avant, c.apres))
+    templates.env.globals.update(version=infos_version.version(), nouveautes=infos_version.nouveautes())
     store = RulesStore(settings.regles_path, settings.historique_dir)
     depot = Depot()
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")

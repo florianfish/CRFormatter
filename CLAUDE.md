@@ -122,5 +122,7 @@ réécrite sur cette base, même si les règles changent ensuite. Le testeur du 
 - Python 3.12, FastAPI, Jinja2, JS vanilla sans build ni CDN (l'outil doit fonctionner hors ligne).
 - Pour publier : incrémenter `version` dans `docformatter/config.yaml` et `CHANGELOG.md`, puis pousser
   sur `main` (la GitHub Action construit `ghcr.io/<compte>/docformatter-{amd64,aarch64}`).
+- Le CHANGELOG est affiché dans l'application (bouton de version, `app/version.py`, Markdown limité
+  aux titres, listes, **gras** et `code`) : le rédiger pour la secrétaire, sans jargon.
 - Les règles par défaut doivent rester couvertes par `test_exemples_des_regles` : toute nouvelle règle
   par défaut a un `exemple` et un résultat attendu dans ce test.

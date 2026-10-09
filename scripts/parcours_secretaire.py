@@ -102,6 +102,15 @@ with sync_playwright() as p:
     assert page.locator(".interrupteur", has_text="Guillemets français").locator("input").is_checked()
     print("8. retour à l'état initial depuis l'historique")
 
+    # Version et nouveautés dans une fenêtre
+    page.click("#ouvrir-nouveautes")
+    expect(page.locator("#nouveautes")).to_be_visible()
+    expect(page.locator("#nouveautes h3").first).to_be_visible()
+    page.screenshot(path=f"{SP}/nouveautes.png")
+    page.keyboard.press("Escape")
+    expect(page.locator("#nouveautes")).to_be_hidden()
+    expect(page.locator("#ouvrir-nouveautes")).not_to_have_class("version nouvelle")
+
     # 9. Mode expert accessible
     assert page.goto(URL + "expert").status == 200
     expect(page.locator("#liste-regles .regle").first).to_be_visible()
