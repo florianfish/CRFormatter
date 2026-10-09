@@ -58,6 +58,15 @@ def test_base_ingress(app):
     assert f'<base href="{BASE}/">' in client(app).get("/").text
 
 
+def test_fichiers_statiques_rechargés_apres_mise_a_jour(app):
+    """Adresse des CSS / JS suivie d'une empreinte de leur contenu (cache du navigateur et de l'Ingress)."""
+    c = client(app)
+    page = c.get("/").text
+    adresse = re.search(r'href="(static/style\.css\?v=[0-9a-f]{10})"', page).group(1)
+    assert re.search(r'src="static/collage\.js\?v=[0-9a-f]{10}"', page)
+    assert c.get(f"/{adresse}").status_code == 200
+
+
 def test_toutes_les_pages_accessibles(app):
     c = client(app)
     for url in ("/", "/vocabulaire", "/mise-en-forme", "/historique", "/expert"):

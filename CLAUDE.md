@@ -105,6 +105,9 @@ réécrite sur cette base, même si les règles changent ensuite. Le testeur du 
 
 - **URLs relatives obligatoires** dans les gabarits et le JS (`api/vocabulaire`, pas `/api/vocabulaire`) :
   l'app est servie sous un préfixe Ingress, injecté dans `<base href>` à partir de `X-Ingress-Path`.
+- **Fichiers statiques** : toujours `{{ statique("x.js") }}` dans les gabarits, jamais `static/x.js` en dur :
+  l'empreinte ajoutée (`?v=`) évite qu'après une mise à jour le navigateur ou l'Ingress HA garde
+  les anciens CSS / JS (cadre de collage invisible en 0.8.0).
 - **Espaces insécables** : écrivez `\u00a0` / `\u202f` sous forme d'échappements, jamais le caractère
   brut (l'outil Write les convertit en caractères invisibles). Dans le champ `remplacement` d'une
   règle, utilisez `{nbsp}` / `{nnbsp}` : `re.sub` n'interprète pas `\u`.

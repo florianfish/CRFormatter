@@ -1,3 +1,8 @@
+## 0.8.1
+
+- Correction : après une mise à jour, l'affichage pouvait rester celui de l'ancienne version
+  (cadre « Collez ici » invisible) tant que la page n'était pas rechargée sans cache.
+
 ## 0.8.0
 
 - **Noms de médicaments** (base publique de l'ANSM, mise à jour du 29/09/2026) : environ 6 000 noms

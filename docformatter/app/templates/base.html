@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base href="{{ base }}/">
   <title>{% block titre %}DocFormatter{% endblock %}</title>
-  <link rel="stylesheet" href="static/style.css">
-  <link rel="icon" href="static/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ statique("style.css") }}">
+  <link rel="icon" href="{{ statique("icone.svg") }}" type="image/svg+xml">
 </head>
 <body>
   <header class="barre">
@@ -44,7 +44,7 @@
     <div class="journal">{{ nouveautes }}</div>
   </dialog>
   {% endif %}
-  <script src="static/commun.js"></script>
+  <script src="{{ statique("commun.js") }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

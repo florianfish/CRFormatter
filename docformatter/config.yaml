@@ -1,5 +1,5 @@
 name: DocFormatter
-version: "0.8.0"
+version: "0.8.1"
 slug: docformatter
 description: Mise en forme et vérification orthographique des comptes rendus médicaux copiés depuis Word, sans IA
 url: https://github.com/florianfish/CRFormatter

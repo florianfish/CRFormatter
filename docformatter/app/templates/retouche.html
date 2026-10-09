@@ -49,4 +49,4 @@
 
 <script id="donnees" type="application/json">{{ donnees|tojson }}</script>
 {% endblock %}
-{% block scripts %}<script src="static/word.js"></script><script src="static/retouche.js"></script>{% endblock %}
+{% block scripts %}<script src="{{ statique("word.js") }}"></script><script src="{{ statique("retouche.js") }}"></script>{% endblock %}

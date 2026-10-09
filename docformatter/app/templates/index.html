@@ -16,4 +16,4 @@
   Le résultat reste disponible pendant 1 heure puis il est effacé ; rien n'est conservé sur disque.
 </p>
 {% endblock %}
-{% block scripts %}<script src="static/collage.js"></script><script src="static/index.js"></script>{% endblock %}
+{% block scripts %}<script src="{{ statique("collage.js") }}"></script><script src="{{ statique("index.js") }}"></script>{% endblock %}

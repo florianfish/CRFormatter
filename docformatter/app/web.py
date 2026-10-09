@@ -8,6 +8,7 @@ les pages du quotidien, pas pour des raisons de droits.
 from __future__ import annotations
 
 import copy
+import hashlib
 import logging
 import secrets
 import threading
@@ -122,11 +123,24 @@ class TestRegles(BaseModel):
     texte: str
 
 
+def adresse_statique():
+    """Adresse d'un fichier de static/ suivie d'une empreinte de leur contenu : après une mise à
+    jour, le navigateur (et le cache de l'Ingress HA) recharge les nouveaux CSS / JS au lieu de
+    garder les anciens."""
+    empreinte = hashlib.sha256()
+    for fichier in sorted((APP_DIR / "static").rglob("*")):
+        if fichier.is_file():
+            empreinte.update(fichier.name.encode() + fichier.read_bytes())
+    suffixe = empreinte.hexdigest()[:10]
+    return lambda nom: f"static/{nom}?v={suffixe}"
+
+
 def creer_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="DocFormatter", docs_url=None, redoc_url=None, openapi_url=None)
     templates = Jinja2Templates(directory=APP_DIR / "templates")
     templates.env.filters["diff"] = lambda c: Markup(diff_html(c.avant, c.apres))
-    templates.env.globals.update(version=infos_version.version(), nouveautes=infos_version.nouveautes())
+    templates.env.globals.update(version=infos_version.version(), nouveautes=infos_version.nouveautes(),
+                                 statique=adresse_statique())
     store = RulesStore(settings.regles_path, settings.historique_dir)
     depot = Depot()
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
