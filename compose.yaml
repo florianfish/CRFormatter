@@ -11,12 +11,9 @@ services:
       DOCFORMATTER_RELOAD: "1"
       DOCFORMATTER_HOST: "0.0.0.0"
       DOCFORMATTER_CONFIG: /config
-      DOCFORMATTER_SHARE: /share/docformatter
-      DOCFORMATTER_SURVEILLE: "${SURVEILLE:-0}"
       DOCFORMATTER_DEV_USER: "${DEV_USER:-dev}"
     volumes:
       - ./docformatter/app:/opt/docformatter/app
       - ./docformatter/defaults:/opt/docformatter/defaults:ro
       - ./dev-data/config:/config
       - ./dev-data/data:/data
-      - ./dev-data/share:/share/docformatter

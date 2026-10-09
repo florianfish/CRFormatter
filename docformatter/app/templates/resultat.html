@@ -4,8 +4,7 @@
 <div class="entete-page">
   <h1>Résultat</h1>
   <div class="actions">
-    {% if cle_zip %}<a class="bouton principal" href="telecharger/{{ cle_zip }}">Tout télécharger (.zip)</a>{% endif %}
-    <a class="bouton" href="./">Nouveau document</a>
+    <a class="bouton" href="./">Nouveau compte rendu</a>
   </div>
 </div>
 
@@ -46,17 +45,14 @@
 {% for r in resultats %}
 <section class="carte">
   <div class="entete-carte">
-    <h2>{{ "Compte rendu collé" if r.colle else r.nom }}</h2>
+    <h2>Compte rendu collé</h2>
     {% if r.cle %}
     <div class="actions">
+      <a class="bouton" href="telecharger/{{ r.cle }}">Télécharger</a>
       <a class="bouton" href="lot/{{ cle_lot }}/document/{{ r.index }}">Retoucher</a>
-      {% if r.colle %}
       <button type="button" class="principal copier" data-document="{{ r.index }}"
               title="Puis Ctrl+V dans Word, à la place du texte d'origine">Copier pour Word</button>
       <script id="blocs-{{ r.index }}" type="application/json">{{ r.blocs|tojson }}</script>
-      {% else %}
-      <a class="bouton principal" href="telecharger/{{ r.cle }}">Télécharger</a>
-      {% endif %}
     </div>
     {% endif %}
   </div>

@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-Add-on Home Assistant (aarch64 Khadas + amd64) qui reformate des comptes rendus médicaux .docx
-**sans IA** : règles regex éditables, Hunspell, correction sur place. Interface servie via Ingress HA,
-HA étant exposé derrière un proxy nginx.
+Add-on Home Assistant (aarch64 Khadas + amd64) qui reformate des comptes rendus médicaux
+**sans IA** : règles regex éditables, Hunspell. **Uniquement par copier-coller** : le texte copié dans
+Word est collé dans l'outil, corrigé, puis recollé dans Word (« Copier pour Word ») ; il n'y a ni dépôt
+de fichier ni dossier surveillé (retirés en 0.7.0). Interface servie via Ingress HA, HA étant exposé
+derrière un proxy nginx.
 
 ## Commandes
 
@@ -11,7 +13,7 @@ make run            # serveur dev, rechargement auto, http://127.0.0.1:8099 (pas
 make docker         # idem dans le conteneur de l'add-on, avec Hunspell
 make test           # pytest (le test d'orthographe est sauté sans Hunspell)
 make test-docker    # pytest dans l'image : à lancer avant de conclure sur l'orthographe
-make exemple        # dev-data/exemples/exemple.docx, compte rendu volontairement mal formaté
+make exemple        # dev-data/exemples/exemple.{docx,html} : compte rendu mal formaté (Word / presse-papiers)
 make e2e            # parcours complet dans Chrome (Playwright) : à lancer après toute modif d'interface
 ```
 
@@ -19,12 +21,13 @@ Un seul test : `cd docformatter && ../.venv/bin/pytest tests/test_pipeline.py -k
 
 ## Architecture
 
-Le traitement d'un document : `colonnes` (résultats d'analyse déplacés dans un tableau sans
+Le texte collé est d'abord converti en .docx (`collage.py`), puis traité comme un document :
+`colonnes` (résultats d'analyse déplacés dans un tableau sans
 bordure, sur le .docx lui-même) → `reader` (docx → `Bloc`) → `sections` (renommage des rubriques) →
 `cleaner` (regex, corrections, majuscules) → `spelling` (Hunspell) → `writer` (réécriture sur place).
 
-**Le document d'origine n'est jamais reconstruit** (exigence : en-têtes / pieds de page de chaque
-page et mise en page conservés). Chaque `Bloc` porte l'identifiant (`source`) de son élément Word
+Le traitement interne reste « sur place » (hérité du dépôt de .docx, il garde le .docx téléchargé
+fidèle au collage) : chaque `Bloc` porte l'identifiant (`source`) de son élément Word
 (`p12`, `t3`, `t3.0.1.0` pour un paragraphe de cellule, cf. `reader.indexer`) ; `writer.ecrire_docx`
 rouvre l'original, ne réécrit que les paragraphes `modifie()` ou annotés (les autres restent
 identiques à l'octet), puis reconstruit l'ordre du corps (paragraphes ajoutés / supprimés /
@@ -78,7 +81,7 @@ réécrite sur cette base, même si les règles changent ensuite. Le testeur du 
   contiennent des chiffres sont exclus des corrections et de l'orthographe.
 - Ce qui relève du métier (vocabulaire, sections, typographie) va dans les **règles YAML**, pas dans
   le code. N'ajoutez du code que pour un nouveau *type* de règle.
-- Les documents envoyés par l'interface restent en mémoire (`Depot`, 1 h, accessibles seulement par
+- Les comptes rendus collés restent en mémoire (`Depot`, 1 h, accessibles seulement par
   leur propriétaire) et ne sont jamais écrits sur disque.
 
 ## Sécurité (Ingress)

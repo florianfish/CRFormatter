@@ -6,7 +6,7 @@ options:
   majuscule_debut: true          # majuscule au premier mot d'un paragraphe ou d'une puce
   point_final: false             # ajoute un point aux paragraphes de 4 mots ou plus
   verifier_orthographe: true     # Hunspell fr_FR + dictionnaire ci-dessous
-  commentaires_orthographe: true # commentaire Word avec suggestions sur chaque mot inconnu
+  commentaires_orthographe: true # .docx téléchargé : commentaire de suggestions sur chaque mot inconnu
   colonnes_resultats: true       # résultats d'analyse regroupés sur plusieurs colonnes (cf. colonnes)
 
 # Expressions régulières (syntaxe Python), appliquées dans l'ordre.

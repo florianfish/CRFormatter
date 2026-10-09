@@ -1,3 +1,9 @@
+## 0.7.0
+
+- **Copier-coller uniquement** : le dépôt de fichiers .docx et le dossier surveillé (option
+  `dossier_surveille`, partage `/share`) sont supprimés. Le compte rendu est copié depuis Word,
+  corrigé, puis recollé avec « Copier pour Word ».
+
 ## 0.6.0
 
 - **Résultats d'analyse sur plusieurs colonnes** : les lignes « Hb (g/dL) : 13,4 » consécutives

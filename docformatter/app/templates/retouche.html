@@ -4,7 +4,7 @@
 <div class="entete-page">
   <div>
     <a href="lot/{{ cle_lot }}" class="retour">← Retour au résultat</a>
-    <h1>{% if colle %}Relire le compte rendu{% else %}Retoucher « {{ nom_document }} »{% endif %}</h1>
+    <h1>Relire le compte rendu</h1>
   </div>
   <div class="actions">
     <span id="etat" class="etat"></span>
@@ -20,8 +20,7 @@
   <kbd>Maj</kbd>+<kbd>Entrée</kbd> un retour à la ligne, <kbd>Retour arrière</kbd> au début d'un paragraphe le
   rattache au précédent et <kbd>Suppr</kbd> à la fin le rattache au suivant (pour supprimer une ligne vide),
   y compris dans un tableau. <strong>Copier pour Word</strong> puis <kbd>Ctrl</kbd>+<kbd>V</kbd> dans Word remplace
-  le texte sélectionné par ce texte corrigé, avec sa mise en forme.{% if not colle %} Le document téléchargé garde
-  les en-têtes, pieds de page et la mise en page du document d'origine.{% endif %}
+  le texte sélectionné par ce texte corrigé, avec sa mise en forme.
 </p>
 
 <div class="espace-retouche">

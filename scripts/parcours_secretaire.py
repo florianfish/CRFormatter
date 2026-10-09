@@ -1,13 +1,28 @@
 """Parcours de la secrétaire dans un vrai navigateur (Playwright + Google Chrome).
 
 À lancer sur une instance de développement : `make e2e`.
-Usage : parcours_secretaire.py URL EXEMPLE.docx DOSSIER_CAPTURES
+Usage : parcours_secretaire.py URL EXEMPLE.html DOSSIER_CAPTURES
+(EXEMPLE.html : le compte rendu tel que Word le place dans le presse-papiers, cf. scripts/exemple.py)
 """
 import sys
+from pathlib import Path
+
 from playwright.sync_api import sync_playwright, expect
 
-URL, EXEMPLE, SP = sys.argv[1], sys.argv[2], sys.argv[3]
+URL, EXEMPLE, SP = sys.argv[1], Path(sys.argv[2]).read_text(encoding="utf-8"), sys.argv[3]
 erreurs = []
+
+
+def coller(page, html):
+    """Colle un compte rendu dans le cadre de la page d'accueil, comme un Ctrl+V depuis Word."""
+    page.goto(URL)
+    page.locator("#zone-collage").evaluate("""(zone, html) => {
+        const donnees = new DataTransfer();
+        donnees.setData("text/html", html);
+        donnees.setData("text/plain", "texte");
+        zone.dispatchEvent(new ClipboardEvent("paste", { clipboardData: donnees, bubbles: true, cancelable: true }));
+    }""", html)
+    page.wait_for_url("**/lot/**")
 
 with sync_playwright() as p:
     nav = p.chromium.launch(channel="chrome", args=["--no-sandbox"])
@@ -15,14 +30,11 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: erreurs.append(str(e)))
     page.on("console", lambda m: m.type == "error" and erreurs.append(m.text))
 
-    # 1. Dépôt du document
-    page.goto(URL)
-    page.set_input_files("#fichiers", EXEMPLE)
-    page.click("#envoyer")
-    page.wait_for_url("**/lot/**")
+    # 1. Collage du compte rendu
+    coller(page, EXEMPLE)
     expect(page.locator(".verification")).to_contain_text("dispnée")
     expect(page.locator("#notification")).to_be_hidden()
-    print("1. document formaté, mots à vérifier affichés")
+    print("1. compte rendu collé et formaté, mots à vérifier affichés")
 
     # 2. Taper un remplacement coche « Remplacer par » ; « Créat » est déclaré correct
     mot = page.locator("fieldset.mot", has_text="dispnée")
@@ -92,11 +104,8 @@ with sync_playwright() as p:
     expect(page.locator("#liste-regles .regle").first).to_be_visible()
     print("9. mode expert accessible")
 
-    # 10. Retouche manuelle du document (sur place : en-têtes et mise en page conservés)
-    page.goto(URL)
-    page.set_input_files("#fichiers", EXEMPLE)
-    page.click("#envoyer")
-    page.wait_for_url("**/lot/**")
+    # 10. Retouche manuelle du compte rendu
+    coller(page, EXEMPLE)
     page.click("text=Retoucher")
     page.wait_for_selector("#feuille .bloc")
     expect(page.locator("#feuille mark.inconnu").first).to_be_visible()
@@ -163,13 +172,8 @@ with sync_playwright() as p:
     examen_docx = next(p for p in doc.paragraphs if p.text.startswith("Patient eupnéique"))
     styles = [(r.text, bool(r.bold), bool(r.italic)) for r in examen_docx.runs if r.text]
     assert styles[0] == ("Patient eupnéique, ", False, False) and styles[1][1:] == (True, True), styles
-    # En-têtes et pied de page du document d'origine conservés
-    section = doc.sections[0]
-    assert section.different_first_page_header_footer
-    assert "HÔPITAL FICTIF" in section.first_page_header.paragraphs[0].text
-    assert "DUPONT Jean" in section.header.paragraphs[0].text
-    assert "Hôpital fictif" in section.footer.paragraphs[0].text
-    print("10. retouche : saisie, paragraphes, annulation, fusion, remplacement, gras/italique, tableau, .docx, en-têtes")
+    assert any(p.text.endswith("Docteur Martin") and p.text.startswith("\t" * 6) for p in doc.paragraphs)
+    print("10. retouche : saisie, paragraphes, annulation, fusion, remplacement, gras/italique, tableau, .docx")
 
     page.click("text=← Retour au résultat")
     expect(page.locator(".pastille", has_text="retouché à la main")).to_be_visible()
@@ -196,14 +200,7 @@ with sync_playwright() as p:
     <p class=MsoNormal>CRP (mg/L) : &lt;1.0</p><p class=MsoNormal>Na (mmol/L) : 144</p>
     </div></body></html>"""
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
-    page.goto(URL)
-    page.locator("#zone-collage").evaluate("""(zone, html) => {
-        const donnees = new DataTransfer();
-        donnees.setData("text/html", html);
-        donnees.setData("text/plain", "texte");
-        zone.dispatchEvent(new ClipboardEvent("paste", { clipboardData: donnees, bubbles: true, cancelable: true }));
-    }""", html_word)
-    page.wait_for_url("**/lot/**")
+    coller(page, html_word)
     # Récapitulatif des corrections avant toute retouche
     expect(page.locator("h2", has_text="Compte rendu collé")).to_be_visible()
     expect(page.locator(".changements")).to_be_visible()

@@ -1,6 +1,6 @@
 # DocFormatter
 
-Add-on Home Assistant de mise en forme des comptes rendus médicaux (.docx), sans IA.
+Add-on Home Assistant de mise en forme des comptes rendus médicaux par copier-coller depuis Word, sans IA.
 Documentation utilisateur : [docformatter/DOCS.md](docformatter/DOCS.md).
 
 ## Installation dans Home Assistant
@@ -25,7 +25,7 @@ Pour publier une nouvelle version : incrémenter `version` dans `docformatter/co
 | `make run` | Serveur local avec rechargement automatique : http://127.0.0.1:8099 |
 | `make docker` | Même chose dans le conteneur de l'add-on (Hunspell inclus, code monté) |
 | `make test` | Tests (`make test-docker` : dans le conteneur, avec l'orthographe) |
-| `make exemple` | Génère `dev-data/exemples/exemple.docx`, un compte rendu mal formaté |
+| `make exemple` | Génère `dev-data/exemples/exemple.docx` (à ouvrir dans Word pour copier le texte) et `exemple.html` (presse-papiers Word, pour `make e2e`) |
 | `make e2e` | Parcours complet de la secrétaire dans Chrome (formatage, vocabulaire, retouche…) |
 
 `make run` crée le `.venv` au premier lancement. Sans Hunspell sur la machine
@@ -35,7 +35,6 @@ Variables utiles :
 
 ```bash
 make run DEV_USER=secretaire              # simuler un autre utilisateur HA
-make run SURVEILLE=1                    # dossier surveillé dev-data/share/entree → sortie
 make run PORT=8100
 ```
 
@@ -61,9 +60,9 @@ docformatter/
     ├── rules.py          modèle des règles (validation pydantic), lecture/écriture YAML
     ├── store.py          stockage des règles : historique, annulation, réparation d'un fichier invalide
     ├── vocabulaire.py    opérations simples de la secrétaire (mots, remplacements, rubriques…)
+    ├── collage.py        texte collé depuis Word (lu par static/collage.js) → .docx traité
     ├── retouche.py       éditeur de retouche : format échangé, conversion vers les blocs
-    ├── web.py            FastAPI : formatage, vocabulaire, mise en forme, historique, mode expert
-    ├── watcher.py        dossier surveillé /share/docformatter
+    ├── web.py            FastAPI : collage, vocabulaire, mise en forme, historique, mode expert
     └── templates/, static/
 ```
 

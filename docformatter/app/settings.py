@@ -3,8 +3,7 @@
 En production (add-on Home Assistant) :
 - /data/options.json : options saisies dans l'onglet « Configuration » de l'add-on ;
 - /data              : données privées de l'add-on (clé de signature des sessions) ;
-- /config            : dossier persistant de l'add-on (règles, historique, dictionnaires) ;
-- /share/docformatter: dossier surveillé, accessible via le partage Samba de HA.
+- /config            : dossier persistant de l'add-on (règles, historique, dictionnaires).
 
 En développement, ces chemins sont surchargés par des variables d'environnement
 DOCFORMATTER_* (voir README).
@@ -33,9 +32,7 @@ log = logging.getLogger("docformatter")
 class Settings:
     dev: bool = False
     config_dir: Path = Path("/config")
-    share_dir: Path = Path("/share/docformatter")
     data_dir: Path = Path("/data")
-    dossier_surveille: bool = False
     port: int = 8099
     # Accès direct sans passer par l'Ingress (ex. sous-domaine via nginx) : connexion obligatoire
     acces_direct: bool = False
@@ -66,7 +63,6 @@ def charger_settings() -> Settings:
     s = Settings(
         dev=env.get("DOCFORMATTER_DEV") == "1",
         config_dir=Path(env.get("DOCFORMATTER_CONFIG", "/config")),
-        share_dir=Path(env.get("DOCFORMATTER_SHARE", "/share/docformatter")),
         data_dir=Path(env.get("DOCFORMATTER_DATA", "/data")),
         port=int(env.get("DOCFORMATTER_PORT", "8099")),
         dev_utilisateur=env.get("DOCFORMATTER_DEV_USER", "dev"),
@@ -74,7 +70,6 @@ def charger_settings() -> Settings:
     options_path = Path(env.get("DOCFORMATTER_OPTIONS", "/data/options.json"))
     if options_path.exists():
         options = json.loads(options_path.read_text(encoding="utf-8"))
-        s.dossier_surveille = bool(options.get("dossier_surveille", False))
         s.acces_direct = bool(options.get("acces_direct", False))
         for u in options.get("utilisateurs", []):
             nom, mot_de_passe = str(u.get("nom", "")).strip().lower(), str(u.get("mot_de_passe", ""))
@@ -86,8 +81,6 @@ def charger_settings() -> Settings:
             s.utilisateurs[nom] = mot_de_passe
         if s.acces_direct and not s.utilisateurs:
             log.error("Accès direct activé sans utilisateur valide : personne ne pourra se connecter")
-    if "DOCFORMATTER_SURVEILLE" in env:
-        s.dossier_surveille = env["DOCFORMATTER_SURVEILLE"] == "1"
     s.config_dir.mkdir(parents=True, exist_ok=True)
     s.data_dir.mkdir(parents=True, exist_ok=True)
     s.dictionnaires_dir.mkdir(parents=True, exist_ok=True)

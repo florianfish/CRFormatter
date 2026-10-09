@@ -1,7 +1,4 @@
 configuration:
-  dossier_surveille:
-    name: Watched folder
-    description: Automatically format .docx files dropped in /share/docformatter/entree into /share/docformatter/sortie.
   acces_direct:
     name: Direct access
     description: >-

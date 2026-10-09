@@ -1,8 +1,4 @@
 configuration:
-  dossier_surveille:
-    name: Dossier surveillé
-    description: >-
-      Formate automatiquement les .docx déposés dans /share/docformatter/entree vers /share/docformatter/sortie.
   acces_direct:
     name: Accès direct
     description: >-

@@ -52,7 +52,7 @@ LIBELLES_OPTIONS = {
     "majuscule_debut": ("Majuscule en début de paragraphe", "patient stable", "Patient stable"),
     "point_final": ("Point à la fin des paragraphes", "Patient stable ce jour", "Patient stable ce jour."),
     "verifier_orthographe": ("Signaler les mots inconnus", "dispnée", "dispnée (surligné en jaune)"),
-    "commentaires_orthographe": ("Proposer des corrections en commentaire dans Word", "dispnée",
+    "commentaires_orthographe": ("Suggestions en commentaire dans le .docx téléchargé", "dispnée",
                                  "commentaire « Suggestions : dyspnée »"),
     "colonnes_resultats": ("Résultats d'analyse sur plusieurs colonnes", "Hb : 13,4 / Plaquettes : 294 / CRP : 2 / Na : 140",
                            "Hb : 13,4 | CRP : 2 — Plaquettes : 294 | Na : 140"),

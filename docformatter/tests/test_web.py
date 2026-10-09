@@ -1,7 +1,6 @@
 import base64
 import io
 import json
-import os
 import re
 
 import pytest
@@ -11,22 +10,12 @@ from fastapi.testclient import TestClient
 from app.settings import INGRESS_PROXY_IP, Settings
 from app.web import creer_app
 
-DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 BASE = "/api/hassio_ingress/abc"
-
-
-def _docx(*paragraphes: str) -> bytes:
-    doc = Document()
-    for p in paragraphes:
-        doc.add_paragraph(p)
-    buf = io.BytesIO()
-    doc.save(buf)
-    return buf.getvalue()
 
 
 @pytest.fixture
 def settings(tmp_path):
-    s = Settings(config_dir=tmp_path / "config", share_dir=tmp_path / "share", data_dir=tmp_path / "data")
+    s = Settings(config_dir=tmp_path / "config", data_dir=tmp_path / "data")
     s.config_dir.mkdir()
     s.dictionnaires_dir.mkdir()
     return s
@@ -49,10 +38,12 @@ def texte_docx(c, page) -> list[str]:
     return [p.text for p in Document(io.BytesIO(c.get(f"/telecharger/{lien}").content)).paragraphs]
 
 
-def formater(c, *paragraphes, nom="cr.docx"):
-    r = c.post("/formater", files={"fichiers": (nom, _docx(*paragraphes), DOCX)})
-    assert r.status_code == 303 and r.headers["location"].startswith(f"{BASE}/lot/")
-    cle = r.headers["location"].rsplit("/", 1)[1]
+def formater(c, *paragraphes):
+    """Colle un compte rendu (un paragraphe par texte) ; retourne la clé du lot et la page de résultat."""
+    blocs = [{"segments": [{"texte": t}] if t else []} for t in paragraphes]
+    r = c.post("/api/coller", json={"blocs": blocs})
+    assert r.status_code == 200, r.text
+    cle = r.json()["adresse"].removeprefix("lot/")
     return cle, c.get(f"/lot/{cle}")
 
 
@@ -84,23 +75,15 @@ def test_formater_et_telecharger(app):
     lien = page.text.split('href="telecharger/')[1].split('"')[0]
     fichier = c.get(f"/telecharger/{lien}")
     assert fichier.status_code == 200 and fichier.content[:2] == b"PK"
-    assert "filename*=UTF-8''cr%20-%20format%C3%A9.docx" in fichier.headers["content-disposition"]
+    assert "filename*=UTF-8''Compte%20rendu%20-%20format%C3%A9.docx" in fichier.headers["content-disposition"]
     # Ni le document ni le lot ne sont accessibles à un autre utilisateur
     autre = client(app, utilisateur="autre")
     assert autre.get(f"/telecharger/{lien}").status_code == 404
 
 
 def test_lot_prive(app):
-    cle, _ = formater(client(app))
+    cle, _ = formater(client(app), "texte")
     assert client(app, utilisateur="autre").get(f"/lot/{cle}").status_code == 404
-
-
-def test_fichier_invalide(app):
-    c = client(app)
-    r = c.post("/formater", files={"fichiers": ("cr.docx", b"pas un docx", DOCX)})
-    assert "pas pu être lu" in c.get(r.headers["location"].removeprefix(BASE)).text
-    r = c.post("/formater", files={"fichiers": ("cr.pdf", b"%PDF", "application/pdf")})
-    assert "seuls les fichiers Word" in c.get(r.headers["location"].removeprefix(BASE)).text
 
 
 def test_decisions_depuis_le_document(app, monkeypatch):
@@ -261,30 +244,19 @@ def test_alerte_fichier_abime(settings):
     assert "Vous pouvez continuer à travailler normalement" in client(app).get("/").text
 
 
-# ---- Configuration et dossier surveillé -----------------------------------------------
+# ---- Configuration --------------------------------------------------------------------
 
 def test_options_addon(tmp_path, monkeypatch):
     from app.settings import charger_settings
 
     options = tmp_path / "options.json"
-    options.write_text(json.dumps({"dossier_surveille": True}))
+    options.write_text(json.dumps({"acces_direct": True, "utilisateurs": [
+        {"nom": "Secretaire", "mot_de_passe": "un-mot-de-passe"}, {"nom": "court", "mot_de_passe": "court"}]}))
     monkeypatch.setenv("DOCFORMATTER_OPTIONS", str(options))
     monkeypatch.setenv("DOCFORMATTER_CONFIG", str(tmp_path / "config"))
     monkeypatch.setenv("DOCFORMATTER_DATA", str(tmp_path / "data"))
     s = charger_settings()
-    assert s.dossier_surveille
-
-
-def test_dossier_surveille(tmp_path):
-    from app.watcher import Surveillant
-
-    s = Surveillant(tmp_path / "share", lambda data: b"ok")
-    fichier = s.entree / "cr.docx"
-    fichier.write_bytes(b"x")
-    os.utime(fichier, (0, 0))
-    s.passe()
-    assert (s.sortie / "cr.docx").read_bytes() == b"ok"
-    assert (s.traites / "cr.docx").exists()
+    assert s.acces_direct and s.utilisateurs == {"secretaire": "un-mot-de-passe"}
 
 
 # ---- Retouche manuelle ----------------------------------------------------------------
@@ -486,19 +458,6 @@ def test_coller_vide_ou_invalide(app):
 def test_coller_document_prive(app):
     adresse = client(app).post("/api/coller", json={"blocs": [{"segments": [seg("texte")]}]}).json()["adresse"]
     assert client(app, "autre").get(f"/{adresse}").status_code == 404
-
-
-def test_mise_en_page_d_un_document_depose(app):
-    """« Copier pour Word » fonctionne aussi depuis un fichier déposé : police du style à défaut."""
-    from tests.fabrique import compte_rendu
-
-    c = client(app)
-    r = c.post("/formater", files={"fichiers": ("cr.docx", compte_rendu(), DOCX)})
-    cle = r.headers["location"].rsplit("/", 1)[1]
-    blocs = editeur(c, cle)["blocs"]
-    titre = next(b for b in blocs if b["type"] == "paragraphe" and "COMPTE-RENDU" in textes([b])[0])
-    assert titre["mise_en_page"]["alignement"] == "centre"
-    assert next(b for b in blocs if b["type"] == "tableau")["mise_en_page"] == {"bordures": False}
 
 
 # ---- Accès direct (proxy nginx) -------------------------------------------------------

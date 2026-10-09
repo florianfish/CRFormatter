@@ -129,7 +129,8 @@ function lireContenu(racine, vue) {
         courant.segments.push({ texte: "\n", brut: true, ...style(noeud, vue, bloc) });
       } else if (/mso-tab-count/.test(attribut)) {
         if (!courant) ouvrir(bloc);
-        courant.segments.push({ texte: "\t", brut: true, ...style(enfant, vue, bloc) });
+        const nombre = Math.min(20, Number(attribut.match(/mso-tab-count:\s*(\d+)/)?.[1]) || 1);
+        courant.segments.push({ texte: "\t".repeat(nombre), brut: true, ...style(enfant, vue, bloc) });
       } else if (/mso-list:\s*Ignore/i.test(attribut)) {
         // Puce ou numéro d'une liste Word : remplacé par un tiret ou gardé (« 1. »), suivi d'une tabulation
         if (!courant) ouvrir(bloc);

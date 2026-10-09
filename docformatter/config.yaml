@@ -1,7 +1,7 @@
 name: DocFormatter
-version: "0.6.0"
+version: "0.7.0"
 slug: docformatter
-description: Mise en forme et vérification orthographique des comptes rendus médicaux (.docx), sans IA
+description: Mise en forme et vérification orthographique des comptes rendus médicaux copiés depuis Word, sans IA
 url: https://github.com/florianfish/CRFormatter
 arch:
   - aarch64
@@ -17,14 +17,10 @@ panel_admin: false
 map:
   - type: addon_config
     read_only: false
-  - type: share
-    read_only: false
 options:
-  dossier_surveille: false
   acces_direct: false
   utilisateurs: []
 schema:
-  dossier_surveille: bool
   acces_direct: bool
   utilisateurs:
     - nom: str

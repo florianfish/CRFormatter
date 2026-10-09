@@ -3,20 +3,18 @@
 #   make run       serveur local avec rechargement auto → http://127.0.0.1:8099
 #   make docker    même chose dans le conteneur de l'add-on (Hunspell inclus)
 #   make test      tests (make test-docker : dans le conteneur, avec Hunspell)
-#   make exemple   génère dev-data/exemples/exemple.docx, un compte rendu mal formaté
+#   make exemple   génère dev-data/exemples/exemple.{docx,html}, un compte rendu mal formaté à copier-coller
 #   make e2e       parcours de la secrétaire dans Chrome (lance un conteneur jetable)
 #
 # Variables : PORT=8099  DEV_USER=dev
-#             SURVEILLE=1 pour activer le dossier surveillé dev-data/share/{entree,sortie}
 
 PORT ?= 8099
 DEV_USER ?= dev
-SURVEILLE ?= 0
 VENV := .venv
 PY := $(CURDIR)/$(VENV)/bin/python
 IMAGE := docformatter:dev
 
-export PORT DEV_USER SURVEILLE
+export PORT DEV_USER
 
 .PHONY: install run docker docker-down test test-docker exemple e2e clean
 
@@ -31,12 +29,12 @@ install: $(VENV)/.installe
 run: install
 	cd docformatter && \
 	DOCFORMATTER_DEV=1 DOCFORMATTER_RELOAD=1 DOCFORMATTER_PORT=$(PORT) \
-	DOCFORMATTER_CONFIG=$(CURDIR)/dev-data/config DOCFORMATTER_SHARE=$(CURDIR)/dev-data/share DOCFORMATTER_DATA=$(CURDIR)/dev-data/data \
-	DOCFORMATTER_SURVEILLE=$(SURVEILLE) DOCFORMATTER_DEV_USER=$(DEV_USER) \
+	DOCFORMATTER_CONFIG=$(CURDIR)/dev-data/config DOCFORMATTER_DATA=$(CURDIR)/dev-data/data \
+	DOCFORMATTER_DEV_USER=$(DEV_USER) \
 	$(PY) -m app
 
 docker:
-	mkdir -p dev-data/config dev-data/share dev-data/data
+	mkdir -p dev-data/config dev-data/data
 	DEV_UID=$$(id -u) DEV_GID=$$(id -g) docker compose up --build
 
 docker-down:
@@ -56,10 +54,10 @@ exemple: install
 
 e2e: exemple
 	@$(PY) -c "import playwright" 2>/dev/null || $(VENV)/bin/pip install -q playwright
-	rm -rf dev-data/e2e && mkdir -p dev-data/e2e/config dev-data/e2e/share dev-data/e2e/data
+	rm -rf dev-data/e2e && mkdir -p dev-data/e2e/config dev-data/e2e/data
 	DEV_UID=$$(id -u) DEV_GID=$$(id -g) PORT=8199 DEV_USER=secretaire \
 		docker compose -p docformatter-e2e -f compose.yaml -f compose.e2e.yaml up --build -d --wait
-	$(PY) scripts/parcours_secretaire.py http://127.0.0.1:8199/ dev-data/exemples/exemple.docx dev-data/e2e; \
+	$(PY) scripts/parcours_secretaire.py http://127.0.0.1:8199/ dev-data/exemples/exemple.html dev-data/e2e; \
 		code=$$?; docker compose -p docformatter-e2e down; exit $$code
 
 clean:

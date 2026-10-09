@@ -1,5 +1,9 @@
 """Génère un compte rendu fictif volontairement mal rédigé, présenté comme un courrier
-hospitalier (en-tête de première page, en-tête des pages suivantes, pied de page)."""
+hospitalier (en-tête de première page, en-tête des pages suivantes, pied de page).
+
+- exemple.docx : à ouvrir dans Word (ou LibreOffice) pour copier le texte et le coller dans l'outil ;
+- exemple.html : le même texte tel que Word le place dans le presse-papiers (utilisé par `make e2e`).
+"""
 
 import sys
 from pathlib import Path
@@ -54,4 +58,30 @@ rubrique("CAT", " : coroscanner a programmer, revoir en consultation dans 1 mois
 d.add_paragraph("")
 d.add_paragraph("\t\t\t\t\t\tDocteur Martin")
 d.save(sortie)
-print(f"Exemple écrit : {sortie}")
+
+# Corps du compte rendu tel que Word le copie (feuille de style MsoNormal, rubriques en gras souligné)
+RUBRIQUE = "<b><u>{}</u></b>"
+html = f"""<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><style>
+p.MsoNormal {{margin:0cm; margin-bottom:8.0pt; line-height:107%; font-size:11.0pt; font-family:"Calibri",sans-serif;}}
+</style></head><body lang=FR><div class=WordSection1>
+<p class=MsoNormal align=center style='text-align:center'><b><span style='font-size:13.0pt'>COMPTE-RENDU DE CONSULTATION</span></b></p>
+<p class=MsoNormal><o:p>&nbsp;</o:p></p>
+<p class=MsoNormal>{RUBRIQUE.format("Motif")}:douleur thoracique depuis 3 jours...</p>
+<p class=MsoNormal>{RUBRIQUE.format("ATCD")} : HTA , diabéte type 2,dyslipidémie</p>
+<p class=MsoNormal>{RUBRIQUE.format("ttt habituel")}:</p>
+<p class=MsoNormal>-kardegic 75mg<span style='mso-tab-count:1'>      </span>1/j</p>
+<p class=MsoNormal>- metformine 1000mg x2/j</p>
+<p class=MsoNormal>{RUBRIQUE.format("Examen clinique")} :</p>
+<p class=MsoNormal>patient eupnéique,apyrétique.<br>TA: 14/9 ; FC: 88bpm. Douleur "en étau", pas d'oedeme
+des MI. dispnée d'effort.</p>
+<p class=MsoNormal>{RUBRIQUE.format("Biologie")} :</p>
+<table class=MsoNormalTable border=0 cellspacing=0 cellpadding=0 style='border-collapse:collapse'>
+<tr><td><p class=MsoNormal>Troponine</p></td><td><p class=MsoNormal>12ng/L</p></td></tr>
+<tr><td><p class=MsoNormal>Créat</p></td><td><p class=MsoNormal>80µmol/L</p></td></tr>
+</table>
+<p class=MsoNormal>{RUBRIQUE.format("CAT")} : coroscanner a programmer, revoir en consultation dans 1 mois</p>
+<p class=MsoNormal><o:p>&nbsp;</o:p></p>
+<p class=MsoNormal>{"<span style='mso-tab-count:6'>      </span>"}Docteur Martin</p>
+</div></body></html>"""
+sortie.with_suffix(".html").write_text(html, encoding="utf-8")
+print(f"Exemple écrit : {sortie} et {sortie.with_suffix('.html')}")

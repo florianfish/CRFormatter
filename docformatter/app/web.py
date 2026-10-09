@@ -8,14 +8,11 @@ les pages du quotidien, pas pour des raisons de droits.
 from __future__ import annotations
 
 import copy
-import io
 import logging
 import secrets
 import threading
 import time
-import zipfile
 from collections import Counter
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,13 +37,12 @@ from .retouche import Edition, depuis_editeur, remplacer_mots, vers_editeur
 from .rules import LIBELLES_OPTIONS, Regles, Remplacement, ecrire_yaml, lire_yaml
 from .settings import APP_DIR, INGRESS_PROXY_IP, Settings
 from .store import ConflitVersion, RegleInvalide, RulesStore
-from .watcher import Surveillant
 
 log = logging.getLogger("docformatter")
 
-TAILLE_MAX = 20 * 1024 * 1024
+TAILLE_MAX = 20 * 1024 * 1024  # fichier de règles importé
 DUREE_CONSERVATION = 3600  # documents gardés en mémoire 1 h, jamais écrits sur disque
-NOM_COLLAGE = "Compte rendu collé.docx"
+NOM_COLLAGE = "Compte rendu.docx"  # nom interne ; téléchargé sous « Compte rendu - formaté.docx »
 MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -125,18 +121,7 @@ class TestRegles(BaseModel):
 
 
 def creer_app(settings: Settings) -> FastAPI:
-    surveillant: Surveillant | None = None
-
-    @asynccontextmanager
-    async def cycle_de_vie(_app: FastAPI):
-        if surveillant:
-            surveillant.start()
-        yield
-        if surveillant:
-            surveillant.arreter()
-
-    app = FastAPI(title="DocFormatter", docs_url=None, redoc_url=None, openapi_url=None,
-                  lifespan=cycle_de_vie)
+    app = FastAPI(title="DocFormatter", docs_url=None, redoc_url=None, openapi_url=None)
     templates = Jinja2Templates(directory=APP_DIR / "templates")
     templates.env.filters["diff"] = lambda c: Markup(diff_html(c.avant, c.apres))
     store = RulesStore(settings.regles_path, settings.historique_dir)
@@ -145,10 +130,6 @@ def creer_app(settings: Settings) -> FastAPI:
 
     def correcteur(regles: Regles) -> Correcteur:
         return Correcteur(charger_mots(regles.dictionnaire, settings.dictionnaires_dir))
-
-    def formater_octets(data: bytes) -> bytes:
-        regles = store.get()
-        return formater(data, regles, correcteur(regles)).docx
 
     # ---- Sécurité ---------------------------------------------------------------------
 
@@ -265,27 +246,9 @@ def creer_app(settings: Settings) -> FastAPI:
     def accueil(request: Request):
         return page(request, "index.html", actif="formater")
 
-    @app.post("/formater")
-    def formater_fichiers(request: Request, fichiers: list[UploadFile] = File(...)):
-        originaux, refus = [], []
-        for f in fichiers:
-            nom = Path(f.filename or "document.docx").name
-            data = f.file.read(TAILLE_MAX + 1)
-            if not nom.lower().endswith(".docx"):
-                refus.append(f"{nom} : seuls les fichiers Word .docx sont acceptés.")
-            elif len(data) > TAILLE_MAX:
-                refus.append(f"{nom} : fichier trop volumineux (20 Mo maximum).")
-            else:
-                originaux.append((nom, data))
-        lot = Lot(originaux)
-        if refus:
-            lot.message = {"type": "erreur", "texte": " ".join(refus)}
-        cle = depot.ajouter(lot, request.state.utilisateur)
-        return RedirectResponse(f"{request.state.base}/lot/{cle}", status_code=303)
-
     @app.post("/api/coller")
     def coller(request: Request, collage: Collage):
-        """Compte rendu collé depuis Word : traité comme un fichier déposé (récapitulatif des corrections)."""
+        """Compte rendu collé depuis Word, converti en .docx pour le traitement (cf. collage.py)."""
         if collage.vide():
             raise RegleInvalide("Le texte collé est vide : copiez le compte rendu dans Word puis recommencez.")
         lot = Lot([(NOM_COLLAGE, docx_depuis_collage(collage))])
@@ -304,13 +267,12 @@ def creer_app(settings: Settings) -> FastAPI:
             return lot.rendu
         regles = store.get()
         corr = correcteur(regles)
-        resultats, sorties = [], []
+        resultats = []
         inconnus: Counter = Counter()
         suggestions: dict[str, list[str]] = {}
         orthographe = False
         for i, (nom, data) in enumerate(lot.originaux):
-            entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches,
-                                      "colle": nom == NOM_COLLAGE}
+            entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches}
             try:
                 if i in lot.retouches:
                     # Réécrite sur le document dont elle est issue, même si les règles ont changé
@@ -319,9 +281,8 @@ def creer_app(settings: Settings) -> FastAPI:
                     res = formater(data, regles, corr)
             except Exception:  # noqa: BLE001
                 log.exception("Échec du traitement de %s", nom)
-                entree["erreur"] = "Ce document n'a pas pu être lu. Est-ce bien un fichier Word valide ?"
+                entree["erreur"] = "Ce compte rendu n'a pas pu être traité : collez-le à nouveau."
             else:
-                sorties.append((nom_sortie(nom), res.docx))
                 inconnus.update(res.inconnus)
                 suggestions.update(res.suggestions)
                 orthographe = orthographe or res.orthographe_active
@@ -334,23 +295,12 @@ def creer_app(settings: Settings) -> FastAPI:
                     changements=res.changements,
                     nb_inconnus=len(res.inconnus),
                     orthographe=res.orthographe_active,
+                    blocs=vers_editeur(res.blocs),  # pour « Copier pour Word »
                 )
-                if entree["colle"]:
-                    entree["blocs"] = vers_editeur(res.blocs)  # pour « Copier pour Word »
             resultats.append(entree)
-
-        cle_zip = None
-        if len(sorties) > 1:
-            buf = io.BytesIO()
-            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-                for nom_fichier, contenu in sorties:
-                    z.writestr(nom_fichier, contenu)
-            cle_zip = depot.ajouter(
-                Fichier("comptes-rendus-formatés.zip", buf.getvalue(), "application/zip"), utilisateur)
 
         lot.rendu = {
             "resultats": resultats,
-            "cle_zip": cle_zip,
             "orthographe": orthographe,
             "inconnus": [(mot, n, suggestions.get(mot, [])) for mot, n in inconnus.most_common()],
         }
@@ -360,7 +310,7 @@ def creer_app(settings: Settings) -> FastAPI:
     def lire_lot(request: Request, cle: str) -> Lot:
         lot = depot.lire(cle, request.state.utilisateur, Lot)
         if lot is None:
-            raise HTTPException(404, "Ces documents ne sont plus disponibles (plus d'une heure) : déposez-les à nouveau.")
+            raise HTTPException(404, "Ce compte rendu n'est plus disponible (plus d'une heure) : collez-le à nouveau.")
         return lot
 
     def lire_document(request: Request, cle: str, n: int) -> Lot:
@@ -410,7 +360,6 @@ def creer_app(settings: Settings) -> FastAPI:
     def page_retouche(request: Request, cle: str, n: int):
         lot = lire_document(request, cle, n)
         return page(request, "retouche.html", actif="formater", cle_lot=cle, index=n,
-                    nom_document=lot.originaux[n][0], colle=lot.originaux[n][0] == NOM_COLLAGE,
                     retouche=n in lot.retouches,
                     donnees={"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)})
 
@@ -453,7 +402,7 @@ def creer_app(settings: Settings) -> FastAPI:
     def telecharger(request: Request, cle: str):
         f = depot.lire(cle, request.state.utilisateur, Fichier)
         if f is None:
-            raise HTTPException(404, "Fichier expiré ou introuvable : déposez à nouveau le document.")
+            raise HTTPException(404, "Fichier expiré ou introuvable : collez à nouveau le compte rendu.")
         return Response(f.contenu, media_type=f.media_type,
                         headers={"Content-Disposition": _content_disposition(f.nom)})
 
@@ -611,10 +560,5 @@ def creer_app(settings: Settings) -> FastAPI:
             return JSONResponse({"erreur": f"Fichier invalide : {e}"}, status_code=422)
         store.remplacer(regles, request.state.utilisateur, f"Import du fichier « {fichier.filename} » (mode expert)")
         return {"ok": True}
-
-    # ---- Dossier surveillé ------------------------------------------------------------
-
-    if settings.dossier_surveille:
-        surveillant = Surveillant(settings.share_dir, formater_octets)
 
     return app

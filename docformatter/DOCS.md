@@ -1,13 +1,12 @@
 # DocFormatter
 
-Mise en forme des comptes rendus médicaux Word (.docx), sans IA et sans service externe :
-tout le traitement a lieu sur votre serveur Home Assistant.
+Mise en forme des comptes rendus médicaux par copier-coller depuis Word, sans IA et sans service
+externe : tout le traitement a lieu sur votre serveur Home Assistant.
 
 ## Ce que fait l'outil
 
-Le document est corrigé **sur place** : en-têtes et pieds de page (y compris ceux de la première
-page), marges, colonnes, styles, alignements, liens et champs automatiques sont conservés à l'identique.
-Seul le texte des paragraphes du corps est corrigé.
+Le texte du compte rendu est copié dans Word, collé dans l'outil, corrigé, puis recollé dans le
+document d'origine. Les en-têtes, pieds de page et la mise en page du document ne quittent jamais Word.
 
 1. **Rubriques** : renomme les libellés de rubrique écrits autrement (« ATCD : » → « Antécédents : »,
    « ttt habituel : » → « Traitement habituel : »), en gardant leur mise en forme (gras, souligné…).
@@ -16,12 +15,9 @@ Seul le texte des paragraphes du corps est corrigé.
 3. **Corrections connues** : remplace automatiquement une liste de fautes fréquentes.
 4. **Résultats d'analyse sur plusieurs colonnes** : au moins 4 lignes consécutives de type
    « Hb (g/dL) : 13,4 » sont placées sur 2 colonnes (tableau sans bordure) pour gagner de la
-   hauteur de page. Ce n'est pas fait si elles sont déjà dans une section Word en colonnes.
-   Désactivable dans « Mise en forme » ; nombre de colonnes, minimum et motif dans les règles (`colonnes`).
+   hauteur de page. Désactivable dans « Mise en forme » ; nombre de colonnes, minimum et motif dans les règles (`colonnes`).
 5. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical. Les mots inconnus sont
-   **surlignés en jaune avec un commentaire de suggestions, jamais corrigés automatiquement**.
-
-Les paragraphes contenant un lien, un champ automatique ou une image sont laissés intacts.
+   **surlignés en jaune, jamais corrigés automatiquement** ; des suggestions sont proposées.
 
 Les chiffres et posologies ne sont jamais modifiés, seulement espacés.
 
@@ -29,22 +25,19 @@ Les chiffres et posologies ne sont jamais modifiés, seulement espacés.
 
 L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus ») :
 
-- **Coller un compte rendu** (le plus rapide) : dans Word, sélectionner le texte du compte rendu et
-  le copier (`Ctrl+C`), puis le coller (`Ctrl+V`) dans le cadre de la page « Formater ». Le résultat
-  montre l'aperçu, le détail des corrections et les mots à vérifier ; « Retoucher » ouvre l'éditeur
-  si besoin. Ensuite, « Copier pour Word » (sur le résultat ou dans l'éditeur) puis
-  `Ctrl+V` dans Word, à la place du texte d'origine toujours sélectionné : gras, italique, souligné,
-  alignements, retraits, espacements, police, taille et tableaux sont repris. En-têtes et pieds de
-  page ne quittent jamais le document Word. Les listes Word sont recollées comme des paragraphes
-  commençant par un tiret (ou leur numéro), avec le même retrait.
-- **Formater** : déposer un ou plusieurs .docx, puis télécharger le résultat. Les mots inconnus
-  sont listés en haut : pour chacun, choisir « Le mot est correct » ou « Remplacer par… », puis
-  « Enregistrer mes choix et reformater ». L'outil s'en souviendra pour les prochains documents.
-- **Retoucher** (bouton sur chaque document du résultat) : modifier le texte déjà corrigé — gras,
-  italique, souligné, ajouter, déplacer ou supprimer un paragraphe, remplacer un mot signalé.
-  L'éditeur montre le corps du document ; en-têtes, pieds de page et mise en page sont conservés
-  dans le .docx produit. Les corrections automatiques ne sont jamais réappliquées sur un document retouché.
-  « Copier pour Word » y est aussi disponible.
+- **Formater** : dans Word, sélectionner le texte du compte rendu et le copier (`Ctrl+C`), puis le
+  coller (`Ctrl+V`) dans le cadre de la page. Le résultat montre l'aperçu, le détail des corrections
+  et les mots inconnus : pour chacun, choisir « Le mot est correct » ou « Remplacer par… », puis
+  « Enregistrer mes choix et reformater ». L'outil s'en souviendra pour les prochains comptes rendus.
+- **Copier pour Word** (sur le résultat ou dans l'éditeur), puis `Ctrl+V` dans Word, à la place du
+  texte d'origine toujours sélectionné : gras, italique, souligné, alignements, retraits,
+  espacements, police, taille et tableaux sont repris. Les listes Word sont recollées comme des
+  paragraphes commençant par un tiret (ou leur numéro), avec le même retrait ; les images et les
+  liens ne sont pas repris (ne pas les inclure dans la sélection). « Télécharger » donne aussi le
+  texte corrigé en .docx.
+- **Retoucher** : modifier le texte déjà corrigé — gras, italique, souligné, ajouter, déplacer ou
+  supprimer un paragraphe ou une ligne vide, remplacer un mot signalé. Les corrections automatiques
+  ne sont jamais réappliquées sur un texte retouché.
 - **Vocabulaire** : remplacements automatiques (fautes, abréviations), mots connus, rubriques et
   leurs différentes écritures. Chaque modification est enregistrée immédiatement.
 - **Mise en forme** : interrupteurs pour activer ou désactiver chaque correction, avec un exemple.
@@ -56,7 +49,6 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
 
 | Option | Description |
 | --- | --- |
-| `dossier_surveille` | Active le traitement automatique de `/share/docformatter/entree` → `/share/docformatter/sortie`. |
 | `acces_direct` | Autorise l'accès sans passer par Home Assistant (voir « Accès direct par un sous-domaine »). |
 | `utilisateurs` | Identifiants et mots de passe (10 caractères minimum) pour l'accès direct. |
 
@@ -103,8 +95,8 @@ pages. Protéger l'outil revient donc à protéger la connexion à Home Assistan
 5. **Encore plus strict** : ne plus exposer HA sur Internet et passer par un VPN (Tailscale ou
    WireGuard, disponibles en add-on). Seuls les appareils inscrits au VPN peuvent alors se connecter.
 
-Avec nginx, pensez aussi à autoriser des envois de fichiers suffisamment gros dans le bloc `server`
-(la valeur par défaut, 1 Mo, est trop faible) :
+Avec nginx, pensez aussi à autoriser des envois suffisamment gros dans le bloc `server` : un long
+compte rendu collé avec sa mise en forme peut dépasser la valeur par défaut (1 Mo) :
 
 ```nginx
 client_max_body_size 25m;
@@ -155,7 +147,5 @@ L'accès par la barre latérale de Home Assistant continue de fonctionner en par
 
 ## Confidentialité
 
-Les documents envoyés depuis l'interface sont traités en mémoire. Le résultat reste téléchargeable
-pendant une heure par l'utilisateur qui l'a produit, puis il est effacé ; rien n'est écrit sur disque.
-Avec le dossier surveillé, en revanche, les fichiers restent dans `/share/docformatter` jusqu'à ce que
-vous les supprimiez.
+Le texte collé est traité en mémoire. Le résultat reste disponible pendant une heure pour
+l'utilisateur qui l'a produit, puis il est effacé ; rien n'est écrit sur disque.
