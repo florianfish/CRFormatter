@@ -1,5 +1,5 @@
 name: DocFormatter
-version: "0.2.0"
+version: "0.3.0"
 slug: docformatter
 description: Mise en forme et vérification orthographique des comptes rendus médicaux (.docx), sans IA
 url: https://github.com/florianfish/CRFormatter
@@ -12,7 +12,7 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:file-document-edit-outline
 panel_title: Comptes rendus
-# Visible par tous les utilisateurs HA ; le mode expert est limité par l'option « experts ».
+# Visible par tous les utilisateurs HA, y compris non administrateurs.
 panel_admin: false
 map:
   - type: addon_config
@@ -20,11 +20,8 @@ map:
   - type: share
     read_only: false
 options:
-  experts: []
   dossier_surveille: false
 schema:
-  experts:
-    - str
   dossier_surveille: bool
 # Image publiée par la GitHub Action (le tag correspond à « version »).
 # Commenter cette ligne pour que le Supervisor construise l'image localement à partir du Dockerfile.

@@ -34,14 +34,14 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
 - `defaults/regles.yaml` est copié dans `/config/regles.yaml` **uniquement au premier démarrage** :
   le modifier ne change pas une installation existante.
 
-## Deux publics
+## Deux usages
 
-- **La secrétaire** (non technique, tout utilisateur du panneau) : Formater, Vocabulaire, Mise en forme,
+- **La secrétaire** (non technique) : Formater, Vocabulaire, Mise en forme,
   Historique. Aucun jargon (pas de « regex », « YAML », « casse »), messages d'erreur en langage courant,
   enregistrement immédiat et bouton « Annuler » après chaque action.
-- **L'expert** (option `experts` de l'add-on) : règles regex, testeur, modèle Word, import/export.
-  Le nom, la description et l'exemple d'une règle regex sont affichés à la secrétaire : les rédiger
-  sans jargon.
+- **Le mode expert** (accessible à tous, séparé pour ne pas encombrer) : règles regex, testeur,
+  modèle Word, import/export. Le nom, la description et l'exemple d'une règle regex sont affichés
+  sur la page « Mise en forme » : les rédiger sans jargon.
 
 ## Règles métier à respecter
 
@@ -57,8 +57,8 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
 ## Sécurité (Ingress)
 
 - En production, seules les requêtes venant de `172.30.32.2` (proxy Ingress du Supervisor) sont
-  acceptées. L'utilisateur vient de l'en-tête `X-Remote-User-Name` ; il est expert s'il figure dans
-  l'option `experts`. Garder `proxy_headers=False` dans uvicorn, sinon l'IP peut être usurpée.
+  acceptées. L'utilisateur vient de l'en-tête `X-Remote-User-Name` (historique, propriété
+  des documents en mémoire) ; il n'y a pas de rôles, l'authentification est celle de HA. Garder `proxy_headers=False` dans uvicorn, sinon l'IP peut être usurpée.
 - `DOCFORMATTER_DEV=1` désactive l'authentification. Ce mode est réservé au développement local.
 - Côté JS, insérer le texte via `el()` / `textContent`. `innerHTML` n'est utilisé que pour du HTML
   déjà échappé côté serveur (`apercu.py`).

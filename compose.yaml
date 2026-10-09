@@ -14,7 +14,6 @@ services:
       DOCFORMATTER_SHARE: /share/docformatter
       DOCFORMATTER_SURVEILLE: "${SURVEILLE:-0}"
       DOCFORMATTER_DEV_USER: "${DEV_USER:-dev}"
-      DOCFORMATTER_DEV_EXPERT: "${DEV_EXPERT:-1}"
     volumes:
       - ./docformatter/app:/opt/docformatter/app
       - ./docformatter/defaults:/opt/docformatter/defaults:ro

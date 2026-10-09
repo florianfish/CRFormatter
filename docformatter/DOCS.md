@@ -28,14 +28,13 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
 - **Mise en forme** : interrupteurs pour activer ou désactiver chaque correction, avec un exemple.
 - **Historique** : toutes les modifications, avec leur date et leur auteur ; on peut revenir à
   n'importe quel état précédent. Chaque modification propose aussi un bouton « Annuler » immédiat.
-- **Expert** (réservé à l'option `experts`) : création de règles avancées (expressions régulières),
+- **Expert** : création de règles avancées (expressions régulières),
   testeur, modèle Word, import/export des règles.
 
 ## Configuration
 
 | Option | Description |
 | --- | --- |
-| `experts` | Noms d'utilisateur HA (identifiant de connexion, pas le nom affiché) ayant accès au mode expert. Les autres utilisateurs du panneau peuvent formater et gérer le vocabulaire. |
 | `dossier_surveille` | Active le traitement automatique de `/share/docformatter/entree` → `/share/docformatter/sortie`. |
 
 ## Fichiers et sécurité des règles
@@ -49,16 +48,41 @@ Dans `/addon_configs/<id>_docformatter/` (accessible avec l'add-on Samba ou File
 
 Si `regles.yaml` devient invalide (par exemple après une modification manuelle ratée), l'outil
 continue de fonctionner : le fichier fautif est renommé `regles.invalide-<date>.yaml`, la dernière
-version valide est rétablie et un avertissement s'affiche en mode expert.
+version valide est rétablie et un avertissement s'affiche en haut des pages.
 
 Ce dossier est inclus dans les sauvegardes Home Assistant : configurez-les vers un stockage externe
 (NAS, cloud) pour vous protéger d'une panne de la carte SD ou du disque.
 
-## Accès à distance
+## Sécuriser l'accès
 
-L'interface passe uniquement par l'Ingress de Home Assistant : elle hérite de l'authentification HA
-et n'ouvre aucun port. Si HA est derrière nginx, pensez à autoriser des envois de fichiers
-suffisamment gros dans le bloc `server` (la valeur par défaut de nginx, 1 Mo, est trop faible) :
+L'outil n'ouvre aucun port : il n'est joignable qu'à travers Home Assistant (Ingress), qui exige
+d'être connecté. Tout utilisateur HA voyant le panneau « Comptes rendus » a accès à toutes les
+pages. Protéger l'outil revient donc à protéger la connexion à Home Assistant.
+
+1. **Un compte dédié pour la secrétaire** (Paramètres › Personnes › Ajouter) : *non administrateur*,
+   avec un mot de passe robuste. Elle voit le panneau sans pouvoir toucher au reste de HA.
+2. **Double authentification** (code à usage unique, application Authenticator) pour chaque compte :
+   Profil › Modules d'authentification multifacteur. C'est la protection la plus efficace contre
+   un mot de passe deviné ou volé.
+3. **Bannissement des tentatives répétées** dans `configuration.yaml`. Derrière nginx, HA doit
+   connaître l'IP réelle des visiteurs, sinon c'est nginx lui-même qui serait banni :
+
+   ```yaml
+   http:
+     use_x_forwarded_for: true
+     trusted_proxies:
+       - 172.30.33.0/24   # adapter : adresse ou réseau de votre nginx
+     ip_ban_enabled: true
+     login_attempts_threshold: 5
+   ```
+
+4. **Option « Peut uniquement se connecter depuis le réseau local »** sur un compte qui n'a pas
+   besoin d'accès extérieur (Paramètres › Personnes › l'utilisateur).
+5. **Encore plus strict** : ne plus exposer HA sur Internet et passer par un VPN (Tailscale ou
+   WireGuard, disponibles en add-on). Seuls les appareils inscrits au VPN peuvent alors se connecter.
+
+Avec nginx, pensez aussi à autoriser des envois de fichiers suffisamment gros dans le bloc `server`
+(la valeur par défaut, 1 Mo, est trop faible) :
 
 ```nginx
 client_max_body_size 25m;

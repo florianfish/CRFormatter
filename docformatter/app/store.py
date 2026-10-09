@@ -128,8 +128,9 @@ class RulesStore:
 
         self._ecrire(regles)
         self.alerte = (
-            f"Le fichier de règles était invalide ({erreur}). Il a été remplacé par {origine} ; "
-            f"le fichier fautif est conservé sous le nom « {mis_de_cote.name} »."
+            f"Le fichier des règles était abîmé : l'outil a automatiquement repris {origine}. "
+            f"Vous pouvez continuer à travailler normalement. (Détail technique : {erreur} ; "
+            f"fichier conservé sous le nom « {mis_de_cote.name} ».)"
         )
         return regles
 

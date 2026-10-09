@@ -1,3 +1,9 @@
+## 0.3.0
+
+- Le mode expert est accessible à tous les utilisateurs du panneau ; l'option `experts` est supprimée.
+- Documentation : comment sécuriser l'accès à Home Assistant (compte dédié, double authentification,
+  bannissement des tentatives, VPN).
+
 ## 0.2.0
 
 - Interface pensée pour une utilisation non technique : pages Vocabulaire, Mise en forme et Historique.

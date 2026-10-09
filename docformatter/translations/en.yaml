@@ -1,9 +1,4 @@
 configuration:
-  experts:
-    name: Experts
-    description: >-
-      Home Assistant usernames (not display names) allowed to use expert mode (regex rules, Word template,
-      import/export). Vocabulary can be edited by every user.
   dossier_surveille:
     name: Watched folder
     description: Automatically format .docx files dropped in /share/docformatter/entree into /share/docformatter/sortie.

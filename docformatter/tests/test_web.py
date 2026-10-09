@@ -24,7 +24,7 @@ def _docx(*paragraphes: str) -> bytes:
 
 @pytest.fixture
 def settings(tmp_path):
-    s = Settings(config_dir=tmp_path / "config", share_dir=tmp_path / "share", experts=["florian"])
+    s = Settings(config_dir=tmp_path / "config", share_dir=tmp_path / "share")
     s.config_dir.mkdir()
     s.dictionnaires_dir.mkdir()
     return s
@@ -58,21 +58,13 @@ def test_base_ingress(app):
     assert f'<base href="{BASE}/">' in client(app).get("/").text
 
 
-def test_pages_secretaire_accessibles(app):
+def test_toutes_les_pages_accessibles(app):
     c = client(app)
-    for url in ("/", "/vocabulaire", "/mise-en-forme", "/historique"):
+    for url in ("/", "/vocabulaire", "/mise-en-forme", "/historique", "/expert"):
         r = c.get(url)
         assert r.status_code == 200, url
-        assert 'href="expert"' not in r.text  # lien expert masqué
-
-
-def test_expert_reserve(app):
-    c = client(app, utilisateur="secretaire")
-    assert c.get("/expert").status_code == 403
-    assert c.get("/expert/api/remplacements").status_code == 403
-    assert c.get("/expert/export").status_code == 403
-    assert c.post("/expert/api/tester-regle", json={"motif": "a"}).status_code == 403
-    assert client(app, utilisateur="florian").get("/expert").status_code == 200
+        assert 'href="expert"' in r.text
+    assert c.get("/expert/api/remplacements").status_code == 200
 
 
 # ---- Formatage ------------------------------------------------------------------------
@@ -86,13 +78,13 @@ def test_formater_et_telecharger(app):
     assert fichier.status_code == 200 and fichier.content[:2] == b"PK"
     assert "filename*=UTF-8''cr%20-%20format%C3%A9.docx" in fichier.headers["content-disposition"]
     # Ni le document ni le lot ne sont accessibles à un autre utilisateur
-    autre = client(app, utilisateur="florian")
+    autre = client(app, utilisateur="autre")
     assert autre.get(f"/telecharger/{lien}").status_code == 404
 
 
 def test_lot_prive(app):
     cle, _ = formater(client(app))
-    assert client(app, utilisateur="florian").get(f"/lot/{cle}").status_code == 404
+    assert client(app, utilisateur="autre").get(f"/lot/{cle}").status_code == 404
 
 
 def test_fichier_invalide(app):
@@ -213,7 +205,7 @@ def test_mise_en_forme(app):
 # ---- Mode expert ----------------------------------------------------------------------
 
 def test_expert_enregistrer_et_conflit(app):
-    c = client(app, utilisateur="florian")
+    c = client(app, utilisateur="autre")
     donnees = c.get("/expert/api/remplacements").json()
     donnees["remplacements"].append({"nom": "Test", "motif": "abc", "remplacement": "abd"})
     r = c.put("/expert/api/remplacements", json=donnees)
@@ -225,7 +217,7 @@ def test_expert_enregistrer_et_conflit(app):
 
 
 def test_expert_regex_invalide(app):
-    c = client(app, utilisateur="florian")
+    c = client(app, utilisateur="autre")
     donnees = c.get("/expert/api/remplacements").json()
     donnees["remplacements"].append({"nom": "cassée", "motif": "(abc"})
     r = c.put("/expert/api/remplacements", json=donnees)
@@ -233,7 +225,7 @@ def test_expert_regex_invalide(app):
 
 
 def test_expert_tester(app):
-    c = client(app, utilisateur="florian")
+    c = client(app, utilisateur="autre")
     r = c.post("/expert/api/tester-regle", json={"motif": r"(\d)mg", "remplacement": r"\1{nbsp}mg", "exemple": "5mg"})
     assert r.json()["resultat"] == "5 mg"
     r = c.post("/expert/api/tester-regle", json={"motif": "a", "remplacement": r"\2", "exemple": "a"})
@@ -244,7 +236,7 @@ def test_expert_tester(app):
 
 
 def test_import_export(app):
-    c = client(app, utilisateur="florian")
+    c = client(app, utilisateur="autre")
     assert "remplacements:" in c.get("/expert/export").text
     r = c.post("/expert/import", files={"fichier": ("r.yaml", "corrections:\n  abc: abd\n", "application/x-yaml")})
     assert r.status_code == 200
@@ -254,7 +246,7 @@ def test_import_export(app):
 
 
 def test_modele(app, settings):
-    c = client(app, utilisateur="florian")
+    c = client(app, utilisateur="autre")
     assert c.post("/expert/modele", files={"fichier": ("m.docx", b"nope", DOCX)}).status_code == 422
     assert c.post("/expert/modele", files={"fichier": ("m.docx", _docx("contenu ignoré"), DOCX)}).status_code == 200
     assert settings.modele_path.exists()
@@ -262,11 +254,10 @@ def test_modele(app, settings):
     assert not settings.modele_path.exists()
 
 
-def test_alerte_visible_par_l_expert_seulement(settings):
+def test_alerte_fichier_abime(settings):
     settings.regles_path.write_text("options: [pas, valide", encoding="utf-8")
     app = creer_app(settings)
-    assert "invalide" in client(app, utilisateur="florian").get("/").text
-    assert "invalide" not in client(app).get("/").text
+    assert "Vous pouvez continuer à travailler normalement" in client(app).get("/").text
 
 
 # ---- Configuration et dossier surveillé -----------------------------------------------
@@ -275,11 +266,11 @@ def test_options_addon(tmp_path, monkeypatch):
     from app.settings import charger_settings
 
     options = tmp_path / "options.json"
-    options.write_text(json.dumps({"experts": ["Florian ", ""], "dossier_surveille": True}))
+    options.write_text(json.dumps({"dossier_surveille": True}))
     monkeypatch.setenv("DOCFORMATTER_OPTIONS", str(options))
     monkeypatch.setenv("DOCFORMATTER_CONFIG", str(tmp_path / "config"))
     s = charger_settings()
-    assert s.experts == ["florian"] and s.dossier_surveille
+    assert s.dossier_surveille
 
 
 def test_dossier_surveille(tmp_path):

@@ -9,8 +9,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 settings = charger_settings()
 if settings.dev:
     logging.getLogger("docformatter").warning(
-        "Mode développement : authentification désactivée (utilisateur « %s », expert=%s)",
-        settings.dev_utilisateur, settings.dev_expert,
+        "Mode développement : authentification désactivée (utilisateur « %s »)", settings.dev_utilisateur,
     )
 uvicorn.run(
     "app.asgi:creer",

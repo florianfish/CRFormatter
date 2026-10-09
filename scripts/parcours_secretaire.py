@@ -1,6 +1,6 @@
 """Parcours de la secrétaire dans un vrai navigateur (Playwright + Google Chrome).
 
-À lancer sur une instance de développement en profil secrétaire : `make e2e`.
+À lancer sur une instance de développement : `make e2e`.
 Usage : parcours_secretaire.py URL EXEMPLE.docx DOSSIER_CAPTURES
 """
 import sys
@@ -87,13 +87,14 @@ with sync_playwright() as p:
     assert page.locator(".interrupteur", has_text="Guillemets français").locator("input").is_checked()
     print("8. retour à l'état initial depuis l'historique")
 
-    # 9. Pas d'accès expert
-    assert page.goto(URL + "expert").status == 403
-    print("9. mode expert refusé")
+    # 9. Mode expert accessible
+    assert page.goto(URL + "expert").status == 200
+    expect(page.locator("#liste-regles .regle").first).to_be_visible()
+    print("9. mode expert accessible")
 
     nav.close()
 
-# 422 (saisie refusée, étape 5) et 403 (mode expert, étape 9) sont attendus.
-inattendues = [e for e in erreurs if "status of 422" not in e and "status of 403" not in e]
+# 422 (saisie refusée, étape 5) est attendu.
+inattendues = [e for e in erreurs if "status of 422" not in e]
 print("Erreurs JavaScript inattendues :", inattendues or "aucune")
 sys.exit(1 if inattendues else 0)

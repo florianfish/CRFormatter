@@ -1,8 +1,8 @@
 """Application web (servie via Ingress Home Assistant).
 
-Deux niveaux d'accès :
-- tout utilisateur HA ayant accès au panneau : formater, vocabulaire, mise en forme, historique ;
-- experts (option `experts` de l'add-on) : règles regex, testeur, modèle Word, import/export.
+Tout utilisateur HA ayant accès au panneau a accès à tout : l'authentification est celle de HA.
+Le mode expert (regex, testeur, modèle Word, import/export) est séparé pour ne pas encombrer
+les pages du quotidien, pas pour des raisons de droits.
 """
 
 from __future__ import annotations
@@ -149,31 +149,23 @@ def creer_app(settings: Settings) -> FastAPI:
     async def securite(request: Request, call_next):
         if settings.dev:
             request.state.utilisateur = settings.dev_utilisateur
-            request.state.expert = settings.dev_expert
         else:
             # Seul le proxy Ingress du Supervisor (qui exige une session HA) peut nous joindre.
             if request.client is None or request.client.host != INGRESS_PROXY_IP:
                 return Response("Accès refusé", status_code=403)
-            utilisateur = (request.headers.get("x-remote-user-name") or "").lower()
-            request.state.utilisateur = utilisateur
-            request.state.expert = bool(utilisateur) and utilisateur in settings.experts
+            request.state.utilisateur = (request.headers.get("x-remote-user-name") or "").lower()
         request.state.base = request.headers.get("x-ingress-path", "")
         reponse = await call_next(request)
         reponse.headers["X-Content-Type-Options"] = "nosniff"
         reponse.headers["Referrer-Policy"] = "no-referrer"
         return reponse
 
-    def exiger_expert(request: Request) -> None:
-        if not request.state.expert:
-            raise HTTPException(403, "Réservé au mode expert.")
-
     def page(request: Request, nom: str, actif: str = "", status_code: int = 200, **ctx) -> HTMLResponse:
         return templates.TemplateResponse(
             request,
             nom,
-            {"base": request.state.base, "expert": request.state.expert,
-             "utilisateur": request.state.utilisateur, "actif": actif,
-             "alerte": store.alerte if request.state.expert else None, **ctx},
+            {"base": request.state.base, "utilisateur": request.state.utilisateur, "actif": actif,
+             "alerte": store.alerte, **ctx},
             status_code=status_code,
         )
 
@@ -406,20 +398,16 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.get("/expert", response_class=HTMLResponse)
     def page_expert(request: Request):
-        if not request.state.expert:
-            return page(request, "refus.html", actif="expert", status_code=403)
         return page(request, "expert.html", actif="expert", modele_perso=settings.modele_path.exists(),
                     dictionnaires=sorted(p.name for p in settings.dictionnaires_dir.iterdir()))
 
     @app.get("/expert/api/remplacements")
     def lire_remplacements(request: Request):
-        exiger_expert(request)
         regles = store.get()
         return {"version": store.version, "remplacements": [r.model_dump() for r in regles.remplacements]}
 
     @app.put("/expert/api/remplacements")
     def enregistrer_remplacements(request: Request, version: str = Body(...), remplacements: list[dict] = Body(...)):
-        exiger_expert(request)
         try:
             valides = [Remplacement.model_validate(r) for r in remplacements]
         except ValidationError as e:
@@ -430,7 +418,6 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.post("/expert/api/tester-regle")
     def tester_regle(request: Request, test: TestRegle):
-        exiger_expert(request)
         try:
             regle = Remplacement(nom="test", motif=test.motif, remplacement=test.remplacement,
                                  ignorer_casse=test.ignorer_casse)
@@ -443,7 +430,6 @@ def creer_app(settings: Settings) -> FastAPI:
     @app.post("/expert/api/tester")
     def tester(request: Request, test: TestRegles):
         """Teste des règles regex non enregistrées, avec le vocabulaire actuel."""
-        exiger_expert(request)
         try:
             regles = store.get()
             regles.remplacements = [Remplacement.model_validate(r) for r in test.remplacements]
@@ -460,13 +446,11 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.get("/expert/export")
     def exporter(request: Request):
-        exiger_expert(request)
         return Response(ecrire_yaml(store.get()), media_type="application/x-yaml",
                         headers={"Content-Disposition": _content_disposition("regles.yaml")})
 
     @app.post("/expert/import")
     def importer(request: Request, fichier: UploadFile = File(...)):
-        exiger_expert(request)
         try:
             regles = lire_yaml(fichier.file.read(TAILLE_MAX).decode("utf-8"))
         except ValidationError as e:
@@ -478,13 +462,11 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.get("/expert/modele")
     def telecharger_modele(request: Request):
-        exiger_expert(request)
         return Response(modele() or modele_par_defaut(), media_type=MIME_DOCX,
                         headers={"Content-Disposition": _content_disposition("modele.docx")})
 
     @app.post("/expert/modele")
     def deposer_modele(request: Request, fichier: UploadFile = File(...)):
-        exiger_expert(request)
         data = fichier.file.read(TAILLE_MAX)
         try:
             valider_modele(data)
@@ -495,7 +477,6 @@ def creer_app(settings: Settings) -> FastAPI:
 
     @app.delete("/expert/modele")
     def supprimer_modele(request: Request):
-        exiger_expert(request)
         settings.modele_path.unlink(missing_ok=True)
         return {"ok": True}
 

@@ -4,20 +4,19 @@
 #   make docker    même chose dans le conteneur de l'add-on (Hunspell inclus)
 #   make test      tests (make test-docker : dans le conteneur, avec Hunspell)
 #   make exemple   génère dev-data/exemples/exemple.docx, un compte rendu mal formaté
-#   make e2e       parcours de la secrétaire dans Chrome (lance le conteneur en profil secrétaire)
+#   make e2e       parcours de la secrétaire dans Chrome (lance un conteneur jetable)
 #
-# Variables : PORT=8099  DEV_USER=dev  DEV_EXPERT=1 (0 pour voir l'interface de la secrétaire)
+# Variables : PORT=8099  DEV_USER=dev
 #             SURVEILLE=1 pour activer le dossier surveillé dev-data/share/{entree,sortie}
 
 PORT ?= 8099
 DEV_USER ?= dev
-DEV_EXPERT ?= 1
 SURVEILLE ?= 0
 VENV := .venv
 PY := $(CURDIR)/$(VENV)/bin/python
 IMAGE := docformatter:dev
 
-export PORT DEV_USER DEV_EXPERT SURVEILLE
+export PORT DEV_USER SURVEILLE
 
 .PHONY: install run docker docker-down test test-docker exemple e2e clean
 
@@ -33,7 +32,7 @@ run: install
 	cd docformatter && \
 	DOCFORMATTER_DEV=1 DOCFORMATTER_RELOAD=1 DOCFORMATTER_PORT=$(PORT) \
 	DOCFORMATTER_CONFIG=$(CURDIR)/dev-data/config DOCFORMATTER_SHARE=$(CURDIR)/dev-data/share \
-	DOCFORMATTER_SURVEILLE=$(SURVEILLE) DOCFORMATTER_DEV_USER=$(DEV_USER) DOCFORMATTER_DEV_EXPERT=$(DEV_EXPERT) \
+	DOCFORMATTER_SURVEILLE=$(SURVEILLE) DOCFORMATTER_DEV_USER=$(DEV_USER) \
 	$(PY) -m app
 
 docker:
@@ -58,7 +57,7 @@ exemple: install
 e2e: exemple
 	@$(PY) -c "import playwright" 2>/dev/null || $(VENV)/bin/pip install -q playwright
 	rm -rf dev-data/e2e && mkdir -p dev-data/e2e/config dev-data/e2e/share
-	DEV_UID=$$(id -u) DEV_GID=$$(id -g) PORT=8199 DEV_EXPERT=0 DEV_USER=secretaire \
+	DEV_UID=$$(id -u) DEV_GID=$$(id -g) PORT=8199 DEV_USER=secretaire \
 		docker compose -p docformatter-e2e -f compose.yaml -f compose.e2e.yaml up --build -d --wait
 	$(PY) scripts/parcours_secretaire.py http://127.0.0.1:8199/ dev-data/exemples/exemple.docx dev-data/e2e; \
 		code=$$?; docker compose -p docformatter-e2e down; exit $$code

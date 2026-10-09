@@ -12,7 +12,8 @@ Documentation utilisateur : [docformatter/DOCS.md](docformatter/DOCS.md).
    publier, commenter la ligne `image:` : le Supervisor construit alors l'image sur la Khadas.
 3. Dans HA : Paramètres › Modules complémentaires › Boutique › ⋮ › Dépôts → ajouter
    `https://github.com/florianfish/CRFormatter`.
-4. Installer **DocFormatter**, renseigner votre nom d'utilisateur HA dans l'option `experts`, démarrer.
+4. Installer et démarrer **DocFormatter** : « Comptes rendus » apparaît dans la barre latérale.
+5. Sécuriser l'accès : voir la section « Sécuriser l'accès » de [DOCS.md](docformatter/DOCS.md).
 
 Pour publier une nouvelle version : incrémenter `version` dans `docformatter/config.yaml`
 (et `CHANGELOG.md`), puis pousser sur `main`.
@@ -32,7 +33,7 @@ Pour publier une nouvelle version : incrémenter `version` dans `docformatter/co
 Variables utiles :
 
 ```bash
-make run DEV_EXPERT=0 DEV_USER=secretaire   # voir l'interface de la secrétaire (sans mode expert)
+make run DEV_USER=secretaire              # simuler un autre utilisateur HA
 make run SURVEILLE=1                    # dossier surveillé dev-data/share/entree → sortie
 make run PORT=8100
 ```
@@ -66,5 +67,5 @@ docformatter/
 
 Sécurité : en production, l'application n'accepte que les connexions du proxy Ingress du Supervisor
 (`172.30.32.2`) et identifie l'utilisateur via l'en-tête `X-Remote-User-Name` ajouté par HA.
-Tout utilisateur ayant accès au panneau peut formater et gérer le vocabulaire ; le mode expert
-(regex, modèle Word, import/export) est réservé aux utilisateurs listés dans l'option `experts`.
+Tout utilisateur HA ayant accès au panneau a accès à toutes les pages, mode expert compris :
+l'authentification est entièrement déléguée à Home Assistant.
