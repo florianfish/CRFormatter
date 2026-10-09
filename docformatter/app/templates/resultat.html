@@ -46,11 +46,17 @@
 {% for r in resultats %}
 <section class="carte">
   <div class="entete-carte">
-    <h2>{{ r.nom }}</h2>
+    <h2>{{ "Compte rendu collé" if r.colle else r.nom }}</h2>
     {% if r.cle %}
     <div class="actions">
       <a class="bouton" href="lot/{{ cle_lot }}/document/{{ r.index }}">Retoucher</a>
+      {% if r.colle %}
+      <button type="button" class="principal copier" data-document="{{ r.index }}"
+              title="Puis Ctrl+V dans Word, à la place du texte d'origine">Copier pour Word</button>
+      <script id="blocs-{{ r.index }}" type="application/json">{{ r.blocs|tojson }}</script>
+      {% else %}
       <a class="bouton principal" href="telecharger/{{ r.cle }}">Télécharger</a>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -80,7 +86,7 @@
     </details>
 
     {% if r.changements %}
-    <details>
+    <details {% if resultats|length == 1 %}open{% endif %}>
       <summary>Détail des corrections</summary>
       <table class="changements">
         <thead><tr><th>Règle</th><th>Modification</th></tr></thead>
@@ -96,4 +102,4 @@
 </section>
 {% endfor %}
 {% endblock %}
-{% block scripts %}<script src="static/resultat.js"></script>{% endblock %}
+{% block scripts %}<script src="static/word.js"></script><script src="static/resultat.js"></script>{% endblock %}

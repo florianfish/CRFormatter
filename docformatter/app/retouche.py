@@ -58,14 +58,14 @@ def _segments(p: Bloc) -> list[dict]:
 
 def _paragraphe(p: Bloc) -> dict:
     return {"type": "paragraphe", "id": p.source, "origine": p.origine, "segments": _segments(p),
-            "protege": p.protege, "fin_section": p.fin_section}
+            "protege": p.protege, "fin_section": p.fin_section, "mise_en_page": p.mise_en_page}
 
 
 def vers_editeur(blocs: list[Bloc]) -> list[dict]:
     resultat = []
     for b in blocs:
         if b.type == "tableau":
-            resultat.append({"type": "tableau", "id": b.source, "lignes": [
+            resultat.append({"type": "tableau", "id": b.source, "mise_en_page": b.mise_en_page, "lignes": [
                 [[_paragraphe(p) for p in cellule.paragraphes] for cellule in ligne] for ligne in b.lignes
             ]})
         else:
@@ -112,7 +112,8 @@ class _Conversion:
             modele = self.index.get(saisi.origine or "")
             if modele is None or modele.type != "paragraphe":
                 raise RegleInvalide("Paragraphe ajouté sans modèle : rechargez la page.")
-            nouveau = Bloc("paragraphe", origine=modele.source or modele.origine, rpr_base=modele.rpr_base)
+            nouveau = Bloc("paragraphe", origine=modele.source or modele.origine, rpr_base=modele.rpr_base,
+                           mise_en_page=dict(modele.mise_en_page))
             _appliquer_segments(nouveau, saisi.segments)
             return nouveau
         precedent = self.precedent(saisi.id)

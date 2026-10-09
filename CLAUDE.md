@@ -46,6 +46,12 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
   Gras / italique / souligné : `Bloc.formats` (plages sur le texte brut, pour que l'orthographe et
   les remplacements restent du texte simple) ; `Bloc.troncons()` les combine aux mots inconnus pour
   l'écriture Word et l'aperçu. L'éditeur échange des *segments* (`retouche.py`).
+- `collage.py` + `static/collage.js` : compte rendu collé depuis Word. Le navigateur lit le HTML du
+  presse-papiers dans une iframe isolée (styles calculés : Word met police et espacements dans
+  une feuille de style), le serveur en fait un .docx qui suit le traitement normal (page de résultat,
+  retouche). « Copier pour Word » (`static/word.js`, résultat et éditeur) produit le HTML inverse à partir de
+  `Bloc.mise_en_page` (points, cf. `reader.lire_mise_en_page`) via l'événement `copy`, qui
+  fonctionne hors HTTPS (contrairement à `navigator.clipboard`).
 - `vocabulaire.py` : opérations de la secrétaire ; chacune valide sa saisie avec un message
   compréhensible (`RegleInvalide`, HTTP 422) et fournit la phrase affichée dans l'historique.
 - `web.py` : fabrique `creer_app(settings)` ; les tests construisent l'app avec un `Settings` temporaire.

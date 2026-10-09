@@ -4,20 +4,23 @@
 <div class="entete-page">
   <div>
     <a href="lot/{{ cle_lot }}" class="retour">← Retour au résultat</a>
-    <h1>Retoucher « {{ nom_document }} »</h1>
+    <h1>{% if colle %}Relire le compte rendu{% else %}Retoucher « {{ nom_document }} »{% endif %}</h1>
   </div>
   <div class="actions">
     <span id="etat" class="etat"></span>
     <button type="button" id="revenir-auto" {% if not retouche %}hidden{% endif %}>Revenir à la version automatique</button>
-    <button type="button" id="enregistrer" class="principal" disabled>Enregistrer</button>
+    <button type="button" id="enregistrer" disabled>Enregistrer</button>
     <a id="telecharger" class="bouton" href="telecharger/{{ donnees.telechargement }}">Télécharger</a>
+    <button type="button" id="copier" class="principal" title="Puis Ctrl+V dans Word, à la place du texte d'origine">Copier pour Word</button>
   </div>
 </div>
 <p class="aide">
   Cliquez dans le texte pour le modifier. Sélectionnez des mots puis utilisez <strong>G</strong>, <em>I</em> ou
   <u>S</u> pour le gras, l'italique ou le souligné. <kbd>Entrée</kbd> crée un nouveau paragraphe,
   <kbd>Maj</kbd>+<kbd>Entrée</kbd> un retour à la ligne, <kbd>Retour arrière</kbd> au début d'un paragraphe le
-  rattache au précédent. En-têtes, pieds de page et mise en page du document d'origine sont conservés.
+  rattache au précédent. <strong>Copier pour Word</strong> puis <kbd>Ctrl</kbd>+<kbd>V</kbd> dans Word remplace
+  le texte sélectionné par ce texte corrigé, avec sa mise en forme.{% if not colle %} Le document téléchargé garde
+  les en-têtes, pieds de page et la mise en page du document d'origine.{% endif %}
 </p>
 
 <div class="espace-retouche">
@@ -46,4 +49,4 @@
 
 <script id="donnees" type="application/json">{{ donnees|tojson }}</script>
 {% endblock %}
-{% block scripts %}<script src="static/retouche.js"></script>{% endblock %}
+{% block scripts %}<script src="static/word.js"></script><script src="static/retouche.js"></script>{% endblock %}

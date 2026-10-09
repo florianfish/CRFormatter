@@ -103,6 +103,16 @@ textarea { font-family: ui-monospace, Consolas, monospace; font-size: 0.9em; }
 .depot span { color: var(--discret); }
 .depot ul { list-style: none; padding: 0; margin: 8px 0 0; }
 
+/* Collage depuis Word */
+.etapes { margin: 0 0 12px; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
+.zone-collage {
+  min-height: 110px; padding: 16px; border: 2px dashed var(--accent); border-radius: var(--rayon);
+  outline: none; caret-color: transparent; cursor: text; display: flex; align-items: center; justify-content: center;
+}
+.zone-collage:focus { background: var(--fond); border-style: solid; }
+.zone-collage::before { content: attr(data-attente); color: var(--discret); text-align: center; }
+.zone-collage.en-cours { cursor: progress; }
+
 /* Résultat */
 .resume { display: flex; gap: 8px; flex-wrap: wrap; }
 .pastille { padding: 2px 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bordure); font-size: 0.9em; }

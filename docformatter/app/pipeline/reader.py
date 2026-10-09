@@ -8,6 +8,7 @@ import unicodedata
 from dataclasses import dataclass
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 
@@ -84,6 +85,56 @@ def est_protege(p) -> bool:
     return any(br.get(qn("w:type")) in ("page", "column") for br in p.iter(qn("w:br")))
 
 
+ALIGNEMENTS = {WD_ALIGN_PARAGRAPH.CENTER: "centre", WD_ALIGN_PARAGRAPH.RIGHT: "droite",
+               WD_ALIGN_PARAGRAPH.JUSTIFY: "justifie"}
+
+
+def _police(rpr) -> tuple[str | None, float | None]:
+    if rpr is None:
+        return None, None
+    polices, taille = rpr.find(qn("w:rFonts")), rpr.find(qn("w:sz"))
+    nom = polices.get(qn("w:ascii")) if polices is not None else None
+    try:
+        return nom, int(taille.get(qn("w:val"))) / 2 if taille is not None else None
+    except (TypeError, ValueError):
+        return nom, None
+
+
+def _police_du_style(paragraphe: Paragraph) -> tuple[str | None, float | None]:
+    nom = taille = None
+    style = paragraphe.style
+    while style is not None and (nom is None or taille is None):
+        nom = nom or style.font.name
+        taille = taille or (style.font.size.pt if style.font.size else None)
+        style = style.base_style
+    return nom, taille
+
+
+def lire_mise_en_page(paragraphe: Paragraph, rpr) -> dict:
+    """Mise en page directe du paragraphe ; police et taille de son texte, à défaut de sa marque
+    de paragraphe (paragraphe vide), à défaut de son style."""
+    f = paragraphe.paragraph_format
+    m: dict = {}
+    if f.alignment in ALIGNEMENTS:
+        m["alignement"] = ALIGNEMENTS[f.alignment]
+    for cle, valeur in (("retrait_gauche", f.left_indent), ("retrait_premiere_ligne", f.first_line_indent),
+                        ("espace_avant", f.space_before), ("espace_apres", f.space_after)):
+        if valeur is not None:
+            m[cle] = round(valeur.pt, 1)
+    if isinstance(f.line_spacing, float):  # multiple de l'interligne simple (pas une hauteur fixe)
+        m["interligne"] = round(f.line_spacing, 2)
+    ppr = paragraphe._p.find(qn("w:pPr"))
+    sources = [_police(rpr), _police(ppr.find(qn("w:rPr")) if ppr is not None else None)]
+    sources.append(_police_du_style(paragraphe))
+    nom = next((n for n, _ in sources if n), None)
+    taille = next((t for _, t in sources if t), None)
+    if nom:
+        m["police"] = nom
+    if taille:
+        m["taille"] = taille
+    return m
+
+
 def lire_paragraphe(p, ident: str, doc) -> Bloc:
     paragraphe = Paragraph(p, doc)
     ppr = p.find(qn("w:pPr"))
@@ -108,8 +159,21 @@ def lire_paragraphe(p, ident: str, doc) -> Bloc:
         texte = _normaliser(paragraphe.text)
     bloc.texte = bloc.original = texte
     bloc.formats = fusionner(formats)
+    bloc.mise_en_page = lire_mise_en_page(paragraphe, bloc.rpr_base)
     bloc.empreinte_origine = bloc.empreinte()
     return bloc
+
+
+def a_des_bordures(tbl) -> bool:
+    """Tableau quadrillé (style « Grille » ou bordures directes) : repris par « Copier pour Word »."""
+    tblpr = tbl.find(qn("w:tblPr"))
+    if tblpr is None:
+        return False
+    style = tblpr.find(qn("w:tblStyle"))
+    if style is not None and any(m in (style.get(qn("w:val")) or "").lower() for m in ("grid", "grille")):
+        return True
+    bordures = tblpr.find(qn("w:tblBorders"))
+    return bordures is not None and any(b.get(qn("w:val")) not in (None, "nil", "none") for b in bordures)
 
 
 def lire_docx(data: bytes) -> list[Bloc]:
@@ -122,7 +186,7 @@ def lire_docx(data: bytes) -> list[Bloc]:
         if ident.startswith("p"):
             blocs.append(lire_paragraphe(element, ident, doc))
             continue
-        tableau = Bloc("tableau", source=ident)
+        tableau = Bloc("tableau", source=ident, mise_en_page={"bordures": a_des_bordures(element)})
         for r, tr in enumerate(element.iterchildren(qn("w:tr"))):
             ligne = []
             for c, tc in enumerate(tr.iterchildren(qn("w:tc"))):

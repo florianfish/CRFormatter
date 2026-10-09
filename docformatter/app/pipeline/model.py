@@ -76,6 +76,9 @@ class Bloc:
     fin_section: bool = False
     # Propriétés Word du texte (police, taille…) appliquées au texte saisi sans mise en forme d'origine
     rpr_base: Any = None
+    # Mise en page lue (alignement, retraits, espacements en points, interligne, police, taille) :
+    # affichée dans l'éditeur et reprise par « Copier pour Word »
+    mise_en_page: dict[str, Any] = field(default_factory=dict)
     # Tableau : lignes de cellules ; cellule : ses paragraphes
     lignes: list[list[Bloc]] = field(default_factory=list)
     paragraphes: list[Bloc] = field(default_factory=list)

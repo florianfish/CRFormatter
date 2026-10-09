@@ -25,6 +25,14 @@ Les chiffres et posologies ne sont jamais modifiés, seulement espacés.
 
 L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus ») :
 
+- **Coller un compte rendu** (le plus rapide) : dans Word, sélectionner le texte du compte rendu et
+  le copier (`Ctrl+C`), puis le coller (`Ctrl+V`) dans le cadre de la page « Formater ». Le résultat
+  montre l'aperçu, le détail des corrections et les mots à vérifier ; « Retoucher » ouvre l'éditeur
+  si besoin. Ensuite, « Copier pour Word » (sur le résultat ou dans l'éditeur) puis
+  `Ctrl+V` dans Word, à la place du texte d'origine toujours sélectionné : gras, italique, souligné,
+  alignements, retraits, espacements, police, taille et tableaux sont repris. En-têtes et pieds de
+  page ne quittent jamais le document Word. Les listes Word sont recollées comme des paragraphes
+  commençant par un tiret (ou leur numéro), avec le même retrait.
 - **Formater** : déposer un ou plusieurs .docx, puis télécharger le résultat. Les mots inconnus
   sont listés en haut : pour chacun, choisir « Le mot est correct » ou « Remplacer par… », puis
   « Enregistrer mes choix et reformater ». L'outil s'en souviendra pour les prochains documents.
@@ -32,6 +40,7 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
   italique, souligné, ajouter, déplacer ou supprimer un paragraphe, remplacer un mot signalé.
   L'éditeur montre le corps du document ; en-têtes, pieds de page et mise en page sont conservés
   dans le .docx produit. Les corrections automatiques ne sont jamais réappliquées sur un document retouché.
+  « Copier pour Word » y est aussi disponible.
 - **Vocabulaire** : remplacements automatiques (fautes, abréviations), mots connus, rubriques et
   leurs différentes écritures. Chaque modification est enregistrée immédiatement.
 - **Mise en forme** : interrupteurs pour activer ou désactiver chaque correction, avec un exemple.

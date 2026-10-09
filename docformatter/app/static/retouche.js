@@ -2,9 +2,10 @@
 
 /*
  * Éditeur de retouche, sur les paragraphes du document d'origine :
- *   { type: "paragraphe", id, origine, segments, protege, fin_section }
- *   { type: "tableau", id, lignes: [[ [paragraphe] ]] }   (cellule = liste de paragraphes)
- * où un segment est { texte, gras, italique, souligne }. `id` relie le paragraphe à celui du
+ *   { type: "paragraphe", id, origine, segments, protege, fin_section, mise_en_page }
+ *   { type: "tableau", id, mise_en_page, lignes: [[ [paragraphe] ]] }   (cellule = liste de paragraphes)
+ * où un segment est { texte, gras, italique, souligne } et `mise_en_page` l'alignement, les retraits,
+ * espacements (en points), l'interligne, la police et la taille, repris par « Copier pour Word ». `id` relie le paragraphe à celui du
  * document Word ; un paragraphe ajouté n'a pas d'id mais une `origine` (mise en page reprise).
  * La frappe met à jour l'état sans redessiner ; les actions de structure (couper, fusionner,
  * déplacer…) sont mémorisées pour « ↶ Annuler » puis redessinent la feuille.
@@ -19,6 +20,7 @@ let blocs = donnees.blocs;
 let inconnus = donnees.inconnus;      // [{ mot, nombre, suggestions }]
 let telechargement = donnees.telechargement;
 let reference = JSON.stringify(blocs); // dernier état enregistré
+let copie = null;                      // dernier état copié pour Word
 let courant = null;                    // position du dernier paragraphe ayant eu le focus
 let avantSaisie = null;                // état au début de la saisie dans un paragraphe (pour « Annuler »)
 const pile = [];                       // états précédents pour « Annuler »
@@ -75,7 +77,6 @@ function tousLesParagraphes() {
 // ---- Segments (texte + mise en forme) -----------------------------------------------
 
 const memeStyle = (a, b) => STYLES.every((s) => !!a[s] === !!b[s]);
-const texteDe = (segments) => segments.map((s) => s.texte).join("");
 
 /** Fusionne les segments voisins de même mise en forme et retire les segments vides. */
 function normaliser(segments) {
@@ -238,6 +239,8 @@ function elementDe(pos) {
 // ---- Rendu de la feuille ------------------------------------------------------------
 
 function zoneParagraphe(element, p, pos) {
+  const { marginLeft, textIndent, textAlign, fontFamily, fontSize } = styleMiseEnPage(p.mise_en_page);
+  Object.assign(element.style, { marginLeft, textIndent, textAlign, fontFamily, fontSize });
   element.append(rendreSegments(p.segments));
   element.addEventListener("focus", () => {
     courant = pos;
@@ -329,6 +332,7 @@ function clavier(e, element, pos) {
       p.segments = avant;
       blocs.splice(pos.index + 1, 0, {
         type: "paragraphe", id: null, origine: p.id ?? p.origine, segments: apres, protege: false, fin_section: false,
+        mise_en_page: { ...p.mise_en_page },
       });
     });
     rendre({ index: pos.index + 1 }, 0);
@@ -384,10 +388,9 @@ function styler(commande) {
 function modeleAvant(index) {
   for (let i = index; i >= 0; i--) {
     const b = blocs[i];
-    if (b.type === "paragraphe" && !b.fin_section) return b.id ?? b.origine;
+    if (b.type === "paragraphe" && !b.fin_section) return b;
   }
-  const premier = blocs.find((b) => b.type === "paragraphe");
-  return premier ? premier.id ?? premier.origine : null;
+  return blocs.find((b) => b.type === "paragraphe") ?? null;
 }
 
 const actions = {
@@ -411,10 +414,11 @@ const actions = {
   },
   "ajouter-paragraphe"() {
     const index = courant.index + 1;
-    const origine = modeleAvant(courant.index);
-    if (!origine) return;
+    const modele = modeleAvant(courant.index);
+    if (!modele) return;
     modifierStructure(() => blocs.splice(index, 0, {
-      type: "paragraphe", id: null, origine, segments: [], protege: false, fin_section: false,
+      type: "paragraphe", id: null, origine: modele.id ?? modele.origine, segments: [], protege: false,
+      fin_section: false, mise_en_page: { ...modele.mise_en_page },
     }));
     rendre({ index }, 0);
   },
@@ -489,6 +493,15 @@ function afficherMots() {
   }));
 }
 
+// ---- Copier pour Word (cf. word.js) -------------------------------------------------
+
+function copier() {
+  validerSaisie();
+  if (copierPourWord(blocs)) copie = instantane();
+}
+
+document.getElementById("copier").addEventListener("click", copier);
+
 // ---- Enregistrement -----------------------------------------------------------------
 
 function charger(r) {
@@ -536,7 +549,7 @@ document.getElementById("revenir-auto").addEventListener("click", async () => {
 });
 
 window.addEventListener("beforeunload", (e) => {
-  if (modifie()) e.preventDefault();
+  if (modifie() && instantane() !== copie) e.preventDefault();
 });
 
 rendre();

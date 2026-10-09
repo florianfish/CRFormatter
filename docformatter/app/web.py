@@ -31,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import vocabulaire as voc
 from .apercu import diff_html, rendre_blocs
+from .collage import Collage, docx_depuis_collage
 from .auth import COOKIE, DUREE_SESSION, Limiteur, Sessions, charger_cle
 from .pipeline import finaliser_retouche, formater, traiter_texte
 from .pipeline.model import Bloc
@@ -45,6 +46,7 @@ log = logging.getLogger("docformatter")
 
 TAILLE_MAX = 20 * 1024 * 1024
 DUREE_CONSERVATION = 3600  # documents gardés en mémoire 1 h, jamais écrits sur disque
+NOM_COLLAGE = "Compte rendu collé.docx"
 MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -280,6 +282,14 @@ def creer_app(settings: Settings) -> FastAPI:
         cle = depot.ajouter(lot, request.state.utilisateur)
         return RedirectResponse(f"{request.state.base}/lot/{cle}", status_code=303)
 
+    @app.post("/api/coller")
+    def coller(request: Request, collage: Collage):
+        """Compte rendu collé depuis Word : traité comme un fichier déposé (récapitulatif des corrections)."""
+        if collage.vide():
+            raise RegleInvalide("Le texte collé est vide : copiez le compte rendu dans Word puis recommencez.")
+        lot = Lot([(NOM_COLLAGE, docx_depuis_collage(collage))])
+        return {"adresse": f"lot/{depot.ajouter(lot, request.state.utilisateur)}"}
+
     def nom_sortie(nom: str) -> str:
         return f"{Path(nom).stem} - formaté.docx"
 
@@ -298,7 +308,8 @@ def creer_app(settings: Settings) -> FastAPI:
         suggestions: dict[str, list[str]] = {}
         orthographe = False
         for i, (nom, data) in enumerate(lot.originaux):
-            entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches}
+            entree: dict[str, Any] = {"nom": nom, "index": i, "retouche": i in lot.retouches,
+                                      "colle": nom == NOM_COLLAGE}
             try:
                 if i in lot.retouches:
                     res = finaliser_retouche(data, copy.deepcopy(lot.retouches[i]), regles, corr)
@@ -321,6 +332,8 @@ def creer_app(settings: Settings) -> FastAPI:
                     nb_inconnus=len(res.inconnus),
                     orthographe=res.orthographe_active,
                 )
+                if entree["colle"]:
+                    entree["blocs"] = vers_editeur(res.blocs)  # pour « Copier pour Word »
             resultats.append(entree)
 
         cle_zip = None
@@ -394,7 +407,8 @@ def creer_app(settings: Settings) -> FastAPI:
     def page_retouche(request: Request, cle: str, n: int):
         lot = lire_document(request, cle, n)
         return page(request, "retouche.html", actif="formater", cle_lot=cle, index=n,
-                    nom_document=lot.originaux[n][0], retouche=n in lot.retouches,
+                    nom_document=lot.originaux[n][0], colle=lot.originaux[n][0] == NOM_COLLAGE,
+                    retouche=n in lot.retouches,
                     donnees={"blocs": vers_editeur(lot.blocs[n]), **etat_document(lot, n)})
 
     def etat_document(lot: Lot, n: int) -> dict[str, Any]:

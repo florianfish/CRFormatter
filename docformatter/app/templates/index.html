@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block contenu %}
 <h1>Mettre en forme des comptes rendus</h1>
+<section class="carte">
+  <h2>Coller un compte rendu</h2>
+  <ol class="etapes">
+    <li>Dans Word, sélectionnez le texte du compte rendu (l'en-tête et le pied de page n'en font pas partie) et copiez-le avec <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+    <li>Cliquez dans le cadre ci-dessous et collez avec <kbd>Ctrl</kbd>+<kbd>V</kbd> : le texte est corrigé et le détail des corrections s'affiche.</li>
+    <li>Après relecture (et retouche si besoin), « Copier pour Word » puis <kbd>Ctrl</kbd>+<kbd>V</kbd> dans Word, à la place du texte d'origine toujours sélectionné.</li>
+  </ol>
+  <div id="zone-collage" class="zone-collage" contenteditable="true" role="textbox" spellcheck="false"
+       aria-label="Collez ici le compte rendu" data-attente="Collez ici le compte rendu (Ctrl+V)"></div>
+</section>
+
+<h2>Ou déposer des fichiers Word</h2>
 <form id="formulaire" class="carte" action="formater" method="post" enctype="multipart/form-data">
   <label class="depot" id="depot">
     <input type="file" name="fichiers" id="fichiers" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple required>
@@ -12,7 +24,7 @@
 </form>
 <p class="aide">
   Les documents sont traités sur ce serveur, sans service externe ni IA.
-  Le résultat reste disponible au téléchargement pendant 1 heure puis il est effacé ; rien n'est conservé sur disque.
+  Le résultat reste disponible pendant 1 heure puis il est effacé ; rien n'est conservé sur disque.
 </p>
 {% endblock %}
-{% block scripts %}<script src="static/index.js"></script>{% endblock %}
+{% block scripts %}<script src="static/collage.js"></script><script src="static/index.js"></script>{% endblock %}

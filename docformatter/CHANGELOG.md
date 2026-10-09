@@ -1,5 +1,8 @@
 ## 0.6.0
 
+- **Coller un compte rendu depuis Word** : le texte copié dans Word est corrigé puis ouvert dans
+  l'éditeur ; « Copier pour Word » le recolle dans le document d'origine avec sa mise en forme
+  (gras, italique, souligné, alignement, retraits, espacements, police, taille, tableaux).
 - **Correction sur place** : le document d'origine est conservé (en-têtes et pieds de page de chaque
   page, marges, colonnes, styles, liens, champs) ; seul le texte des paragraphes est corrigé.
 - Les rubriques sont renommées sur place (« ATCD : » → « Antécédents : ») en gardant leur mise en forme.

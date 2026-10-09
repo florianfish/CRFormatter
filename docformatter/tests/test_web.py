@@ -388,6 +388,82 @@ def test_retouche_refusee(app):
     assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404
 
 
+# ---- Collage depuis Word --------------------------------------------------------------
+
+def test_coller_affiche_le_recapitulatif_puis_l_editeur(app):
+    c = client(app)
+    titre = {"alignement": "centre", "police": "Arial", "taille": 12, "espace_apres": 6}
+    texte = {"retrait_gauche": 36, "retrait_premiere_ligne": -18, "interligne": 1.07, "police": "Arial", "taille": 10}
+    r = c.post("/api/coller", json={"blocs": [
+        {"segments": [seg("COMPTE-RENDU", gras=True, souligne=True)], "mise_en_page": titre},
+        {"segments": [], "mise_en_page": {"police": "Arial", "taille": 10}},
+        {"segments": [seg("ATCD", gras=True), seg(" : HTA , diabéte\tsuivi")], "mise_en_page": texte},
+        {"type": "tableau", "bordures": True, "lignes": [[[{"segments": [seg("Créatinine")]}],
+                                                          [{"segments": [seg("96µmol/L")]}]]]},
+    ]})
+    assert r.status_code == 200
+    adresse = r.json()["adresse"]
+    assert re.fullmatch(r"lot/[\w-]+", adresse)
+    cle = adresse.split("/")[1]
+    # Récapitulatif : corrections détaillées, « Copier pour Word » avec les blocs du document
+    recap = c.get(f"/{adresse}").text
+    assert "Compte rendu collé" in recap and "Détail des corrections" in recap
+    assert 'class="principal copier"' in recap and 'id="blocs-0"' in recap
+    blocs_recap = json.loads(recap.split('id="blocs-0" type="application/json">')[1].split("</script>")[0])
+    assert blocs_recap == editeur(c, cle)["blocs"]
+    page = c.get(f"/{adresse}/document/0")
+    assert page.status_code == 200 and "Relire le compte rendu" in page.text and 'id="copier"' in page.text
+
+    blocs = editeur(c, cle)["blocs"]
+    # Règles appliquées (rubrique, espaces, remplacement), ligne vide gardée, tabulation conservée
+    assert textes(blocs) == ["COMPTE-RENDU", "", "Antécédents\u00a0: HTA, diabète\tsuivi"]
+    assert blocs[0]["segments"] == [{"texte": "COMPTE-RENDU", "gras": True, "italique": False, "souligne": True}]
+    assert blocs[0]["mise_en_page"] == {**titre, "espace_avant": 0}
+    assert blocs[1]["mise_en_page"] == {"police": "Arial", "taille": 10, "espace_avant": 0, "espace_apres": 0}
+    assert blocs[2]["mise_en_page"] == {**texte, "espace_avant": 0, "espace_apres": 0}
+    tableau = blocs[3]
+    assert tableau["mise_en_page"] == {"bordures": True}
+    assert [["".join(s["texte"] for s in p["segments"]) for p in cellule] for cellule in tableau["lignes"][0]] == [
+        ["Créatinine"], ["96\u00a0µmol/L"]]
+
+
+def test_coller_nouveau_paragraphe_reprend_la_mise_en_page(app):
+    c = client(app)
+    adresse = c.post("/api/coller", json={"blocs": [
+        {"segments": [seg("texte")], "mise_en_page": {"alignement": "droite", "police": "Arial"}}]}).json()["adresse"]
+    cle = adresse.split("/")[1]
+    blocs = editeur(c, cle)["blocs"]
+    blocs.append({"type": "paragraphe", "id": None, "origine": blocs[0]["id"], "segments": [seg("ajout")]})
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
+    assert r.json()["blocs"][1]["mise_en_page"]["alignement"] == "droite"
+
+
+def test_coller_vide_ou_invalide(app):
+    c = client(app)
+    r = c.post("/api/coller", json={"blocs": [{"segments": [seg("  ")]}]})
+    assert r.status_code == 422 and "vide" in r.json()["erreur"]
+    assert c.post("/api/coller", json={"blocs": []}).status_code == 422
+    assert c.post("/api/coller", json={"blocs": [{"segments": [], "mise_en_page": {"taille": 9999}}]}).status_code == 422
+
+
+def test_coller_document_prive(app):
+    adresse = client(app).post("/api/coller", json={"blocs": [{"segments": [seg("texte")]}]}).json()["adresse"]
+    assert client(app, "autre").get(f"/{adresse}").status_code == 404
+
+
+def test_mise_en_page_d_un_document_depose(app):
+    """« Copier pour Word » fonctionne aussi depuis un fichier déposé : police du style à défaut."""
+    from tests.fabrique import compte_rendu
+
+    c = client(app)
+    r = c.post("/formater", files={"fichiers": ("cr.docx", compte_rendu(), DOCX)})
+    cle = r.headers["location"].rsplit("/", 1)[1]
+    blocs = editeur(c, cle)["blocs"]
+    titre = next(b for b in blocs if b["type"] == "paragraphe" and "COMPTE-RENDU" in textes([b])[0])
+    assert titre["mise_en_page"]["alignement"] == "centre"
+    assert next(b for b in blocs if b["type"] == "tableau")["mise_en_page"] == {"bordures": False}
+
+
 # ---- Accès direct (proxy nginx) -------------------------------------------------------
 
 NGINX = "172.30.33.5"

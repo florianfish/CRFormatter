@@ -6,6 +6,13 @@ document.querySelectorAll(".mot .remplacer input[type=text]").forEach((champ) =>
   ["input", "focus"].forEach((t) => champ.addEventListener(t, () => { radio.checked = true; }));
 });
 
+// Compte rendu collé : retour dans Word sans passer par la retouche
+document.querySelectorAll("button.copier").forEach((bouton) => {
+  bouton.addEventListener("click", () => {
+    copierPourWord(JSON.parse(document.getElementById(`blocs-${bouton.dataset.document}`).textContent));
+  });
+});
+
 const annuler = document.getElementById("annuler-decisions");
 if (annuler) {
   annuler.addEventListener("click", async () => {

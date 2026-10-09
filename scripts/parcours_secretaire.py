@@ -175,6 +175,76 @@ with sync_playwright() as p:
     expect(page.locator(".pastille", has_text="retouché à la main")).to_be_visible()
     print("11. document marqué « retouché à la main » dans le résultat")
 
+    # 12. Collage depuis Word puis « Copier pour Word » (HTML du presse-papiers tel que Word le produit)
+    html_word = """<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>
+    p.MsoNormal {margin:0cm; margin-bottom:8.0pt; line-height:107%; font-size:11.0pt; font-family:"Arial",sans-serif;}
+    p.MsoListParagraph {margin-left:36.0pt; text-indent:-18.0pt; margin-bottom:0cm; font-size:11.0pt; font-family:"Arial",sans-serif;}
+    </style></head><body lang=FR><div class=WordSection1>
+    <p class=MsoNormal align=center style='text-align:center'><b><u><span style='font-size:12.0pt'>COMPTE-RENDU
+    DE CONSULTATION</span></u></b></p>
+    <p class=MsoNormal><o:p>&nbsp;</o:p></p>
+    <p class=MsoNormal><b><u>ATCD</u></b> : HTA , diabéte<span style='mso-tab-count:1'>   </span>type 2</p>
+    <p class=MsoListParagraph><![if !supportLists]><span style='font-family:Symbol;mso-list:Ignore'>·<span
+    style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp; </span></span><![endif]>suivi pulmonaire</p>
+    <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0 style='border-collapse:collapse;border:none'>
+    <tr><td style='border:solid windowtext 1.0pt'><p class=MsoNormal>Créatinine</p></td>
+    <td style='border:solid windowtext 1.0pt'><p class=MsoNormal>96µmol/L</p></td></tr></table>
+    <p class=MsoNormal>Poids : 72kg<br>Taille : 1m80</p>
+    </div></body></html>"""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.goto(URL)
+    page.locator("#zone-collage").evaluate("""(zone, html) => {
+        const donnees = new DataTransfer();
+        donnees.setData("text/html", html);
+        donnees.setData("text/plain", "texte");
+        zone.dispatchEvent(new ClipboardEvent("paste", { clipboardData: donnees, bubbles: true, cancelable: true }));
+    }""", html_word)
+    page.wait_for_url("**/lot/**")
+    # Récapitulatif des corrections avant toute retouche
+    expect(page.locator("h2", has_text="Compte rendu collé")).to_be_visible()
+    expect(page.locator(".changements")).to_be_visible()
+    expect(page.locator(".changements")).to_contain_text("diabète")
+    page.screenshot(path=f"{SP}/collage-resultat.png", full_page=True)
+    page.click("button.copier")
+    expect(page.locator("#notification")).to_contain_text("Copié")
+    html_resultat = page.evaluate("""async () => {
+        const [element] = await navigator.clipboard.read();
+        return await (await element.getType("text/html")).text();
+    }""")
+    assert "<b><u>COMPTE-RENDU DE CONSULTATION</u></b>" in html_resultat, html_resultat
+    page.click("text=Retoucher")
+    page.wait_for_url("**/document/0")
+    expect(page.locator("h1")).to_have_text("Relire le compte rendu")
+    blocs = page.locator("#feuille > p.bloc")
+    expect(blocs.nth(0)).to_have_text("COMPTE-RENDU DE CONSULTATION")
+    expect(blocs.nth(0)).to_have_css("text-align", "center")
+    expect(blocs.nth(0).locator("b u, u b")).to_have_count(1)
+    expect(blocs.nth(1)).to_have_text("")
+    expect(blocs.nth(2)).to_have_text("Antécédents : HTA, diabète\ttype 2")
+    expect(blocs.nth(3)).to_have_text("-\tSuivi pulmonaire")
+    expect(blocs.nth(3)).to_have_css("margin-left", "48px")  # 36 pt
+    expect(page.locator("#feuille td p").nth(1)).to_have_text("96 µmol/L")
+    expect(blocs.nth(4)).to_contain_text("72 kg")
+    page.screenshot(path=f"{SP}/collage.png", full_page=True)
+
+    page.click("#copier")
+    expect(page.locator("#notification")).to_contain_text("Copié")
+    copie = page.evaluate("""async () => {
+        const [element] = await navigator.clipboard.read();
+        return { html: await (await element.getType("text/html")).text(),
+                 texte: await (await element.getType("text/plain")).text() };
+    }""")
+    html = copie["html"]
+    assert "text-align: center" in html and "<b><u>COMPTE-RENDU DE CONSULTATION</u></b>" in html, html
+    assert 'font-family: Arial' in html or 'font-family: "Arial"' in html, html
+    assert "font-size: 12pt" in html and "font-size: 11pt" in html, html
+    assert "margin-bottom: 8pt" in html and "line-height: 107%" in html, html
+    assert 'mso-tab-count:1' in html and "margin-left: 36pt" in html and "text-indent: -18pt" in html, html
+    assert "border:solid windowtext 1pt" in html and "Créatinine" in html, html
+    assert "72 kg<br>Taille" in html or "72&nbsp;kg<br>Taille" in html, html
+    assert copie["texte"].startswith("COMPTE-RENDU DE CONSULTATION\r\n\r\nAntécédents"), copie["texte"]
+    print("12. collage depuis Word : récapitulatif, copie depuis le résultat et l'éditeur, mise en page reprise")
+
     nav.close()
 
 # 422 (saisie refusée, étape 5) est attendu.
