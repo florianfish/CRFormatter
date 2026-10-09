@@ -35,20 +35,19 @@ def diff_html(avant: str, apres: str) -> str:
 
 
 def _texte_html(bloc: Bloc, avec_diff: bool) -> str:
-    if not bloc.inconnus:
-        return diff_html(bloc.original, bloc.texte) if avec_diff else _visible(bloc.texte)
-    # Avec mots inconnus : on montre le texte final annoté (le diff est déjà visible ailleurs).
-    morceaux, pos = [], 0
-    for inc in sorted(bloc.inconnus, key=lambda x: x.debut):
-        morceaux.append(_visible(bloc.texte[pos : inc.debut]))
-        sugg = ", ".join(inc.suggestions) or "aucune suggestion"
-        morceaux.append(
-            f'<mark class="inconnu" data-mot="{escape(inc.mot)}" '
-            f'data-suggestions="{escape(",".join(inc.suggestions))}" '
-            f'title="Suggestions : {escape(sugg)}">{escape(inc.mot)}</mark>'
-        )
-        pos = inc.fin
-    morceaux.append(_visible(bloc.texte[pos:]))
+    if avec_diff and not bloc.inconnus and not bloc.formats:
+        return diff_html(bloc.original, bloc.texte)
+    # Texte final avec sa mise en forme et ses mots inconnus annotés
+    morceaux = []
+    for t in bloc.troncons():
+        html = _visible(t.texte)
+        if t.inconnu is not None:
+            sugg = ", ".join(t.inconnu.suggestions) or "aucune suggestion"
+            html = f'<mark class="inconnu" title="Suggestions : {escape(sugg)}">{html}</mark>'
+        for actif, balise in ((t.souligne, "u"), (t.italique, "em"), (t.gras, "strong")):
+            if actif:
+                html = f"<{balise}>{html}</{balise}>"
+        morceaux.append(html)
     return "".join(morceaux)
 
 

@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 
 import pytest
 from docx import Document
@@ -291,6 +292,23 @@ def _texte_docx(contenu: bytes) -> list[str]:
     return [p.text for p in Document(io.BytesIO(contenu)).paragraphs if p.text]
 
 
+def sans_surlignage(html: str) -> str:
+    """Aperçu sans le surlignage des mots inconnus (qui dépend de la présence de Hunspell)."""
+    return re.sub(r"<mark[^>]*>|</mark>", "", html)
+
+
+def seg(texte, **mise_en_forme):
+    return {"texte": texte, **mise_en_forme}
+
+
+def paragraphe(*segments, type_="paragraphe", **autres):
+    return {"type": type_, "segments": [s if isinstance(s, dict) else seg(s) for s in segments], **autres}
+
+
+def textes(blocs):
+    return ["".join(s["texte"] for s in b["segments"]) for b in blocs if b["type"] != "tableau"]
+
+
 def test_retouche_page_et_enregistrement(app):
     c = client(app)
     cle, page = formater(c, "ATCD : HTA", "patient stable")
@@ -300,52 +318,76 @@ def test_retouche_page_et_enregistrement(app):
     assert editeur.status_code == 200 and "\"HTA\"" in editeur.text
 
     blocs = [
-        {"type": "titre", "texte": "Antécédents"},
-        {"type": "liste", "texte": "HTA traitée", "numerote": True},
-        {"type": "paragraphe", "texte": "ttt  à revoir\nDeuxième ligne collée"},
-        {"type": "paragraphe", "texte": "   "},
-        {"type": "tableau", "lignes": [["Hb", "12 g/dL"]]},
+        paragraphe("Antécédents", type_="titre"),
+        paragraphe("HTA traitée", type_="liste", numerote=True),
+        paragraphe("ttt  à revoir\nDeuxième ligne collée"),
+        paragraphe("   "),
+        {"type": "tableau", "lignes": [[[seg("Hb")], [seg("12 g/dL")]]]},
     ]
     r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
     assert r.status_code == 200
     renvoye = r.json()["blocs"]
     # Pas de règle automatique (« ttt » reste), espaces doubles réduites, collage découpé, vide ignoré
-    assert [b.get("texte") for b in renvoye[:4]] == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
-    assert renvoye[1]["numerote"] and renvoye[4]["lignes"] == [["Hb", "12 g/dL"]]
+    assert textes(renvoye) == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
+    assert renvoye[1]["numerote"] and renvoye[4]["lignes"][0][1][0]["texte"] == "12 g/dL"
 
     fichier = c.get(f"/telecharger/{r.json()['telechargement']}")
     assert _texte_docx(fichier.content) == ["Antécédents", "HTA traitée", "ttt à revoir", "Deuxième ligne collée"]
 
-    resultat = c.get(f"/lot/{cle}").text
+    resultat = sans_surlignage(c.get(f"/lot/{cle}").text)
     assert "retouché à la main" in resultat and "ttt à revoir" in resultat
+
+
+def test_retouche_gras_italique_souligne(app):
+    c = client(app)
+    cle, _ = formater(c, "texte")
+    blocs = [
+        paragraphe("Pression ", seg("très élevée", gras=True), " à ", seg("surveiller", italique=True, souligne=True), "."),
+        {"type": "tableau", "lignes": [[[seg("K+", gras=True)], [seg("5,8 mmol/L")]]]},
+    ]
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs})
+    segments = r.json()["blocs"][0]["segments"]
+    assert [(s["texte"], s["gras"], s["italique"], s["souligne"]) for s in segments] == [
+        ("Pression ", False, False, False), ("très élevée", True, False, False), (" à ", False, False, False),
+        ("surveiller", False, True, True), (".", False, False, False),
+    ]
+
+    doc = Document(io.BytesIO(c.get(f"/telecharger/{r.json()['telechargement']}").content))
+    runs = [(run.text, bool(run.bold), bool(run.italic), bool(run.underline)) for run in doc.paragraphs[0].runs]
+    assert runs == [("Pression ", False, False, False), ("très élevée", True, False, False),
+                    (" à ", False, False, False), ("surveiller", False, True, True), (".", False, False, False)]
+    assert doc.tables[0].cell(0, 0).paragraphs[0].runs[0].bold
+
+    apercu = sans_surlignage(c.get(f"/lot/{cle}").text)
+    assert "<strong>très élevée</strong>" in apercu and "<em><u>surveiller</u></em>" in apercu
 
 
 def test_retouche_conservee_apres_ajout_de_vocabulaire(app):
     c = client(app)
     cle, _ = formater(c, "texte d'origine")
-    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "ttt retouché"}]})
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("ttt ", seg("retouché", gras=True))]})
     # Une nouvelle règle ne réécrit pas la retouche…
     c.post("/api/vocabulaire/remplacement", json={"texte": "ttt", "par": "traitement"})
-    assert "ttt retouché" in c.get(f"/lot/{cle}").text
-    # … sauf un remplacement choisi explicitement depuis le résultat
+    assert "ttt <strong>retouché</strong>" in sans_surlignage(c.get(f"/lot/{cle}").text)
+    # … sauf un remplacement choisi explicitement depuis le résultat (mise en forme conservée)
     c.post(f"/lot/{cle}/decisions", data={"mot-0": "retouché", "choix-0": "remplacer", "par-0": "revu"})
-    assert "ttt revu" in c.get(f"/lot/{cle}").text
+    assert "ttt <strong>revu</strong>" in sans_surlignage(c.get(f"/lot/{cle}").text)
 
 
 def test_abandon_retouche(app):
     c = client(app)
     cle, _ = formater(c, "patient stable")
-    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "autre chose"}]})
+    c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("autre chose")]})
     r = c.delete(f"/api/lot/{cle}/document/0")
-    assert [b["texte"] for b in r.json()["blocs"]] == ["Patient stable"]
+    assert textes(r.json()["blocs"]) == ["Patient stable"]
     assert "retouché à la main" not in c.get(f"/lot/{cle}").text
 
 
 def test_retouche_refusee(app):
     c = client(app)
     cle, _ = formater(c, "patient stable")
-    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "paragraphe", "texte": "  "}]})
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [paragraphe("  ")]})
     assert r.status_code == 422 and "vide" in r.json()["erreur"]
-    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script", "texte": "x"}]}).status_code == 422
+    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": [{"type": "script", "segments": []}]}).status_code == 422
     assert c.get(f"/lot/{cle}/document/5").status_code == 404
     assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404

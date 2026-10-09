@@ -124,3 +124,18 @@ def test_orthographe(regles):
 def test_bloc_sans_inconnus_textuels():
     t = Bloc("tableau", lignes=[[Bloc("paragraphe", texte="a")]])
     assert [b.texte for b in t.textuels()] == ["a"]
+
+
+def test_mot_inconnu_a_cheval_sur_deux_mises_en_forme():
+    from app.pipeline.model import Format, Inconnu
+    from app.pipeline.writer import ecrire_docx
+
+    inconnu = Inconnu(4, 11, "dispnée", ["dyspnée"])
+    bloc = Bloc("paragraphe", texte="Une dispnée", formats=[Format(0, 7, gras=True)], inconnus=[inconnu])
+    assert [(t.texte, t.gras, t.inconnu is not None) for t in bloc.troncons()] == [
+        ("Une ", True, False), ("dis", True, True), ("pnée", False, True),
+    ]
+    doc = Document(io.BytesIO(ecrire_docx([bloc], None, commentaires=True)))
+    runs = [r for r in doc.paragraphs[0].runs if r.text]  # sans le run de référence du commentaire
+    assert [(r.text, bool(r.bold)) for r in runs] == [("Une ", True), ("dis", True), ("pnée", False)]
+    assert len(doc.comments) == 1 and "dyspnée" in next(iter(doc.comments)).text

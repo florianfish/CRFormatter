@@ -33,6 +33,9 @@ Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode e
   `Lot.retouches` et passe par `finaliser_retouche` (orthographe + écriture) : **aucune règle
   automatique n'est réappliquée sur une saisie manuelle**, même si le vocabulaire change.
   Seul un remplacement choisi explicitement depuis la page de résultat y est appliqué.
+  Gras / italique / souligné : `Bloc.formats` (plages sur le texte brut, pour que l'orthographe et
+  les remplacements restent du texte simple) ; `Bloc.troncons()` les combine aux mots inconnus pour
+  l'écriture Word et l'aperçu. L'éditeur échange des *segments* (`retouche.py`).
 - `vocabulaire.py` : opérations de la secrétaire ; chacune valide sa saisie avec un message
   compréhensible (`RegleInvalide`, HTTP 422) et fournit la phrase affichée dans l'historique.
 - `web.py` : fabrique `creer_app(settings)` ; les tests construisent l'app avec un `Settings` temporaire.

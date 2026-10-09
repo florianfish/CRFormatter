@@ -228,6 +228,11 @@ kbd { font: 0.85em ui-monospace, Consolas, monospace; padding: 0 4px; border: 1p
 .barre-outils label { display: flex; gap: 6px; align-items: center; font-size: 0.9em; }
 .barre-outils select { font: inherit; padding: 5px; border-radius: 6px; border: 1px solid var(--bordure); background: var(--fond); color: var(--texte); }
 .barre-outils button { padding: 5px 10px; }
+.barre-outils .style-gras { font-weight: 700; }
+.barre-outils .style-italique { font-style: italic; font-family: Georgia, serif; }
+.barre-outils .style-souligne { text-decoration: underline; }
+.barre-outils [data-action="gras"], .barre-outils [data-action="italique"], .barre-outils [data-action="souligne"] { min-width: 34px; }
+.barre-outils button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
 .separateur { width: 1px; align-self: stretch; background: var(--bordure); margin: 0 4px; }
 .outils-tableau { display: inline-flex; gap: 6px; }
 .feuille {

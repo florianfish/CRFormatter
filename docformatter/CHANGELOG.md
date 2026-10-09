@@ -1,7 +1,8 @@
 ## 0.4.0
 
 - Éditeur de retouche : modifier le document après les corrections automatiques (texte, titres,
-  listes, tableaux, mots signalés), puis télécharger le .docx régénéré avec le modèle Word.
+  listes, tableaux, mots signalés, gras / italique / souligné), puis télécharger le .docx
+  régénéré avec le modèle Word.
 
 ## 0.3.0
 

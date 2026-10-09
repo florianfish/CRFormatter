@@ -32,11 +32,13 @@ class Nettoyeur:
                 changements.append(Changement(regle.nom, texte, nouveau))
                 texte = nouveau
 
-        if self._motif_corrections:
-            texte = self._motif_corrections.sub(
-                lambda m: self._corriger(m.group(0), changements), texte
-            )
-        return texte.strip()
+        return self.corriger(texte, changements).strip()
+
+    def corriger(self, texte: str, changements: list[Changement]) -> str:
+        """Seulement les remplacements de mots entiers (espaces et ponctuation intacts)."""
+        if not self._motif_corrections:
+            return texte
+        return self._motif_corrections.sub(lambda m: self._corriger(m.group(0), changements), texte)
 
     def _corriger(self, mot: str, changements: list[Changement]) -> str:
         correction = self.corrections[mot.lower()]

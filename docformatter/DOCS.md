@@ -24,8 +24,8 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
   sont listés en haut : pour chacun, choisir « Le mot est correct » ou « Remplacer par… », puis
   « Enregistrer mes choix et reformater ». L'outil s'en souviendra pour les prochains documents.
 - **Retoucher** (bouton sur chaque document du résultat) : modifier le texte déjà corrigé, comme
-  dans Word — changer un paragraphe en titre ou en liste, déplacer, supprimer, ajouter des lignes
-  à un tableau, remplacer un mot signalé. « Enregistrer » régénère le .docx avec le modèle Word.
+  dans Word — gras, italique, souligné, changer un paragraphe en titre ou en liste, déplacer,
+  supprimer, ajouter des lignes à un tableau, remplacer un mot signalé. « Enregistrer » régénère le .docx avec le modèle Word.
   Les corrections automatiques ne sont jamais réappliquées sur un document retouché.
 - **Vocabulaire** : remplacements automatiques (fautes, abréviations), mots connus, rubriques et
   leurs différentes écritures. Chaque modification est enregistrée immédiatement.

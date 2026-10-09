@@ -128,6 +128,19 @@ with sync_playwright() as p:
     mot.get_by_role("button", name="Remplacer").click()
     expect(page.locator("#feuille")).to_contain_text("dyspnée d'effort")
 
+    # Gras avec le bouton, italique avec Ctrl+I, sur le dernier mot sélectionné au clavier
+    examen = page.locator("#feuille p.bloc", has_text="Patient eupnéique")
+    examen.click()
+    page.keyboard.press("End")
+    page.keyboard.press("Shift+Control+ArrowLeft")
+    page.keyboard.press("Shift+Control+ArrowLeft")  # « apyrétique. » : le mot et le point
+    page.click('[data-action="gras"]')
+    expect(page.locator('[data-action="gras"]')).to_have_attribute("aria-pressed", "true")
+    page.keyboard.press("Control+i")
+    expect(examen.locator("b")).to_have_count(1)
+    page.click("text=Antécédents")  # quitter le paragraphe
+    expect(page.locator("#feuille p.bloc", has_text="Patient eupnéique").locator("b i, i b")).to_have_count(1)
+
     # Cellule de tableau
     page.locator("#feuille td", has_text="Troponine").click()
     page.keyboard.press("End")
@@ -146,7 +159,10 @@ with sync_playwright() as p:
     assert any("(retouche)Nouveau paragraphe saisi" in t for t in textes), textes
     assert any("dyspnée d'effort" in t for t in textes), textes
     assert doc.tables[0].cell(0, 0).text == "Troponine Tn" and len(doc.tables[0].rows) == 3
-    print("10. retouche : saisie, nouveau paragraphe, type, annulation, fusion, remplacement, tableau, .docx")
+    examen_docx = next(p for p in doc.paragraphs if p.text.startswith("Patient eupnéique"))
+    styles = [(r.text, bool(r.bold), bool(r.italic)) for r in examen_docx.runs]
+    assert styles[0] == ("Patient eupnéique, ", False, False) and styles[1][1:] == (True, True), styles
+    print("10. retouche : saisie, paragraphes, type, annulation, fusion, gras/italique, remplacement, tableau, .docx")
 
     page.click("text=← Retour au résultat")
     expect(page.locator(".pastille", has_text="retouché à la main")).to_be_visible()

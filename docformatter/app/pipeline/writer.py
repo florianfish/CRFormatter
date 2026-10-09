@@ -8,7 +8,7 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Cm, Pt, RGBColor
 
-from .model import Bloc
+from .model import Bloc, Inconnu
 
 AUTEUR = "DocFormatter"
 
@@ -50,23 +50,26 @@ def _style(doc, *noms: str):
 
 
 def _ecrire_texte(doc, paragraphe, bloc: Bloc, commentaires: bool) -> None:
-    """Ajoute le texte en surlignant les mots inconnus (+ commentaire avec suggestions)."""
-    pos = 0
-    for inconnu in sorted(bloc.inconnus, key=lambda x: x.debut):
-        if inconnu.debut > pos:
-            paragraphe.add_run(bloc.texte[pos : inconnu.debut])
-        run = paragraphe.add_run(bloc.texte[inconnu.debut : inconnu.fin])
-        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-        if commentaires:
-            texte = (
-                "Mot inconnu. Suggestions : " + ", ".join(inconnu.suggestions)
-                if inconnu.suggestions
-                else "Mot inconnu, aucune suggestion."
-            )
-            doc.add_comment(run, text=texte, author=AUTEUR, initials="DF")
-        pos = inconnu.fin
-    if pos < len(bloc.texte):
-        paragraphe.add_run(bloc.texte[pos:])
+    """Ajoute le texte avec sa mise en forme ; les mots inconnus sont surlignés et reçoivent
+    un commentaire avec les suggestions."""
+    runs_par_inconnu: dict[int, tuple[Inconnu, list]] = {}
+    for t in bloc.troncons():
+        run = paragraphe.add_run(t.texte)
+        run.bold = t.gras or None
+        run.italic = t.italique or None
+        run.underline = t.souligne or None
+        if t.inconnu is not None:
+            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            runs_par_inconnu.setdefault(id(t.inconnu), (t.inconnu, []))[1].append(run)
+    if not commentaires:
+        return
+    for inconnu, runs in runs_par_inconnu.values():
+        texte = (
+            "Mot inconnu. Suggestions : " + ", ".join(inconnu.suggestions)
+            if inconnu.suggestions
+            else "Mot inconnu, aucune suggestion."
+        )
+        doc.add_comment(runs, text=texte, author=AUTEUR, initials="DF")
 
 
 def ecrire_docx(blocs: list[Bloc], modele: bytes | None, commentaires: bool) -> bytes:

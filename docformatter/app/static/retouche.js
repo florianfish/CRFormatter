@@ -2,7 +2,8 @@
 
 /*
  * Éditeur de retouche. Le document est une liste de blocs :
- *   { type: "titre" | "paragraphe" | "liste", texte, numerote }  ou  { type: "tableau", lignes: [[texte]] }
+ *   { type: "titre" | "paragraphe" | "liste", segments, numerote }  ou  { type: "tableau", lignes: [[segments]] }
+ * où un segment est { texte, gras, italique, souligne }.
  * La frappe met à jour l'état sans redessiner ; les actions de structure (couper, fusionner,
  * déplacer, changer de type…) sont mémorisées pour « ↶ Annuler » puis redessinent la feuille.
  */
@@ -10,6 +11,7 @@
 const donnees = JSON.parse(document.getElementById("donnees").textContent);
 const feuille = document.getElementById("feuille");
 const URL_API = feuille.dataset.api;
+const STYLES = ["gras", "italique", "souligne"];
 
 let blocs = donnees.blocs;
 let inconnus = donnees.inconnus;      // [{ mot, nombre, suggestions }]
@@ -19,11 +21,8 @@ let courant = null;                    // { index, ligne?, colonne? } : dernier 
 let avantSaisie = null;                // état au début de la saisie dans un bloc (pour « Annuler »)
 const pile = [];                       // états précédents pour « Annuler »
 
-const PLAINTEXT = (() => {
-  const d = document.createElement("div");
-  d.contentEditable = "plaintext-only";
-  return d.contentEditable === "plaintext-only" ? "plaintext-only" : "true";
-})();
+// Gras / italique / souligné produisent des balises <b>, <i>, <u> plutôt que des styles CSS.
+document.execCommand("styleWithCSS", false, false);
 
 // ---- État ---------------------------------------------------------------------------
 
@@ -59,7 +58,64 @@ function majEtat() {
   document.querySelector('[data-action="annuler"]').disabled = pile.length === 0;
 }
 
-// ---- Surlignage des mots inconnus ---------------------------------------------------
+// ---- Segments (texte + mise en forme) -----------------------------------------------
+
+const memeStyle = (a, b) => STYLES.every((s) => !!a[s] === !!b[s]);
+const texteDe = (segments) => segments.map((s) => s.texte).join("");
+
+/** Fusionne les segments voisins de même mise en forme et retire les segments vides. */
+function normaliser(segments) {
+  const resultat = [];
+  for (const s of segments) {
+    if (!s.texte) continue;
+    const dernier = resultat[resultat.length - 1];
+    if (dernier && memeStyle(dernier, s)) dernier.texte += s.texte;
+    else resultat.push({ texte: s.texte, gras: !!s.gras, italique: !!s.italique, souligne: !!s.souligne });
+  }
+  return resultat;
+}
+
+/** Coupe une liste de segments à la position `pos` du texte. */
+function couper(segments, pos) {
+  const avant = [];
+  const apres = [];
+  let vu = 0;
+  for (const s of segments) {
+    const fin = vu + s.texte.length;
+    if (fin <= pos) avant.push({ ...s });
+    else if (vu >= pos) apres.push({ ...s });
+    else {
+      avant.push({ ...s, texte: s.texte.slice(0, pos - vu) });
+      apres.push({ ...s, texte: s.texte.slice(pos - vu) });
+    }
+    vu = fin;
+  }
+  return [normaliser(avant), normaliser(apres)];
+}
+
+/** Lit le contenu d'une zone éditable : texte et mise en forme (balises ou styles en ligne). */
+function lireSegments(racine) {
+  const segments = [];
+  const parcourir = (noeud, style) => {
+    if (noeud.nodeType === Node.TEXT_NODE) {
+      segments.push({ texte: noeud.data, ...style });
+      return;
+    }
+    if (noeud.nodeType !== Node.ELEMENT_NODE) return;
+    if (noeud.tagName === "BR") { segments.push({ texte: "\n", ...style }); return; }
+    const s = { ...style };
+    const balise = noeud.tagName;
+    const css = noeud.style;
+    if (["B", "STRONG"].includes(balise) || (css && (css.fontWeight === "bold" || Number(css.fontWeight) >= 600))) s.gras = true;
+    if (["I", "EM"].includes(balise) || css?.fontStyle === "italic") s.italique = true;
+    if (balise === "U" || css?.textDecorationLine?.includes("underline") || css?.textDecoration?.includes("underline")) s.souligne = true;
+    noeud.childNodes.forEach((enfant) => parcourir(enfant, s));
+  };
+  racine.childNodes.forEach((enfant) => parcourir(enfant, { gras: false, italique: false, souligne: false }));
+  return normaliser(segments);
+}
+
+// ---- Rendu du texte (mise en forme + mots inconnus surlignés) ------------------------
 
 function motifInconnus() {
   if (!inconnus.length) return null;
@@ -67,8 +123,7 @@ function motifInconnus() {
   return new RegExp(`(?<![\\p{L}\\p{N}])(${mots.join("|")})(?![\\p{L}\\p{N}])`, "gu");
 }
 
-function surligner(texte) {
-  const motif = motifInconnus();
+function surligner(texte, motif) {
   const fragment = document.createDocumentFragment();
   if (!motif) {
     fragment.append(texte);
@@ -83,6 +138,23 @@ function surligner(texte) {
     pos = m.index + m[0].length;
   }
   fragment.append(texte.slice(pos));
+  return fragment;
+}
+
+function rendreSegments(segments) {
+  const motif = motifInconnus();
+  const fragment = document.createDocumentFragment();
+  for (const s of segments) {
+    let noeud = surligner(s.texte, motif);
+    for (const [style, balise] of [["souligne", "u"], ["italique", "i"], ["gras", "b"]]) {
+      if (s[style]) {
+        const enveloppe = document.createElement(balise);
+        enveloppe.append(noeud);
+        noeud = enveloppe;
+      }
+    }
+    fragment.append(noeud);
+  }
   return fragment;
 }
 
@@ -129,35 +201,36 @@ function elementDe(cible) {
     : feuille.querySelector(`[data-index="${index}"] [data-ligne="${ligne}"][data-colonne="${colonne}"]`);
 }
 
-// ---- Rendu --------------------------------------------------------------------------
+// ---- Rendu de la feuille ------------------------------------------------------------
 
 function zoneEditable(element, lire, ecrire, position) {
-  element.contentEditable = PLAINTEXT;
+  element.contentEditable = "true";
   element.spellcheck = false;
   element.classList.add("editable");
-  element.append(surligner(lire()));
+  element.append(rendreSegments(lire()));
   element.addEventListener("focus", () => {
     courant = position;
     avantSaisie = instantane();
     majBarre();
   });
   element.addEventListener("input", () => {
-    ecrire(element.textContent);
+    if (!element.textContent) element.replaceChildren(); // pas de <br> résiduel : le texte d'aide réapparaît
+    ecrire(lireSegments(element));
     majEtat();
   });
   element.addEventListener("blur", () => {
     // Un élément retiré par un nouveau rendu perd aussi le focus : rien à faire dans ce cas.
     if (!element.isConnected) return;
     validerSaisie();
-    element.replaceChildren(surligner(lire())); // met à jour le surlignage
+    element.replaceChildren(rendreSegments(lire())); // met à jour le surlignage
     majEtat();
   });
-  if (PLAINTEXT !== "plaintext-only") {
-    element.addEventListener("paste", (e) => {
-      e.preventDefault();
-      document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
-    });
-  }
+  // Collage et glisser-déposer : texte brut uniquement (pas de mise en forme étrangère)
+  element.addEventListener("paste", (e) => {
+    e.preventDefault();
+    document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+  });
+  element.addEventListener("drop", (e) => e.preventDefault());
 }
 
 function elementBloc(bloc, index, numero) {
@@ -167,8 +240,11 @@ function elementBloc(bloc, index, numero) {
       const tr = el("tr");
       ligne.forEach((_, c) => {
         const td = el("td", { "data-ligne": l, "data-colonne": c });
-        zoneEditable(td, () => bloc.lignes[l][c], (t) => { bloc.lignes[l][c] = t; }, { index, ligne: l, colonne: c });
-        td.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+        zoneEditable(td, () => bloc.lignes[l][c], (s) => { bloc.lignes[l][c] = s; }, { index, ligne: l, colonne: c });
+        td.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") e.preventDefault();
+          raccourcis(e);
+        });
         tr.append(td);
       });
       table.append(tr);
@@ -179,7 +255,7 @@ function elementBloc(bloc, index, numero) {
   const balise = bloc.type === "titre" ? "h2" : "p";
   const element = el(balise, { class: `bloc bloc-${bloc.type}`, "data-index": index });
   if (bloc.type === "liste") element.dataset.puce = bloc.numerote ? `${numero}.` : "•";
-  zoneEditable(element, () => bloc.texte, (t) => { bloc.texte = t; }, { index });
+  zoneEditable(element, () => bloc.segments, (s) => { bloc.segments = s; }, { index });
   element.addEventListener("keydown", (e) => clavier(e, element, index));
   return element;
 }
@@ -200,7 +276,16 @@ function rendre(focus = null, offset = null) {
   majEtat();
 }
 
-// ---- Clavier : couper / fusionner des paragraphes ------------------------------------
+// ---- Clavier ------------------------------------------------------------------------
+
+function raccourcis(e) {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    enregistrer();
+  }
+  // Ctrl+B / Ctrl+I / Ctrl+U : gérés nativement par le navigateur
+}
 
 function clavier(e, element, index) {
   const bloc = blocs[index];
@@ -209,30 +294,29 @@ function clavier(e, element, index) {
     const pos = positionCurseur(element);
     const type = bloc.type === "titre" ? "paragraphe" : bloc.type;
     // Entrée sur une puce vide : on sort de la liste, comme dans Word
-    if (bloc.type === "liste" && !bloc.texte) {
+    if (bloc.type === "liste" && !texteDe(bloc.segments)) {
       modifierStructure(() => { bloc.type = "paragraphe"; });
       rendre({ index }, 0);
       return;
     }
     modifierStructure(() => {
-      const apres = bloc.texte.slice(pos);
-      bloc.texte = bloc.texte.slice(0, pos);
-      blocs.splice(index + 1, 0, { type, texte: apres, numerote: bloc.numerote && type === "liste" });
+      const [avant, apres] = couper(bloc.segments, pos);
+      bloc.segments = avant;
+      blocs.splice(index + 1, 0, { type, segments: apres, numerote: bloc.numerote && type === "liste" });
     });
     rendre({ index: index + 1 }, 0);
   } else if (e.key === "Backspace" && getSelection().isCollapsed && positionCurseur(element) === 0 && index > 0) {
     const precedent = blocs[index - 1];
     if (precedent.type === "tableau") return;
     e.preventDefault();
-    const jonction = precedent.texte.length;
+    const jonction = texteDe(precedent.segments).length;
     modifierStructure(() => {
-      precedent.texte += bloc.texte;
+      precedent.segments = normaliser([...precedent.segments, ...bloc.segments]);
       blocs.splice(index, 1);
     });
     rendre({ index: index - 1 }, jonction);
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-    e.preventDefault();
-    enregistrer();
+  } else {
+    raccourcis(e);
   }
 }
 
@@ -242,16 +326,37 @@ function majBarre() {
   const bloc = courant ? blocs[courant.index] : null;
   const select = document.getElementById("type-bloc");
   select.disabled = !bloc || bloc.type === "tableau";
-  if (bloc && bloc.type !== "tableau") {
-    select.value = bloc.type === "liste" ? (bloc.numerote ? "numero" : "puce") : bloc.type;
-  }
-  for (const action of ["monter", "descendre", "supprimer"]) {
+  select.value = !bloc || bloc.type === "tableau" ? ""
+    : bloc.type === "liste" ? (bloc.numerote ? "numero" : "puce") : bloc.type;
+  for (const action of ["monter", "descendre", "supprimer", "gras", "italique", "souligne"]) {
     document.querySelector(`[data-action="${action}"]`).disabled = !bloc;
   }
   document.querySelector(".outils-tableau").hidden = !bloc || bloc.type !== "tableau";
+  majBoutonsStyle();
+}
+
+/** Boutons G / I / S enfoncés selon la mise en forme sous le curseur. */
+function majBoutonsStyle() {
+  const dansFeuille = feuille.contains(getSelection().anchorNode);
+  for (const [action, commande] of [["gras", "bold"], ["italique", "italic"], ["souligne", "underline"]]) {
+    const actif = dansFeuille && document.queryCommandState(commande);
+    document.querySelector(`[data-action="${action}"]`).setAttribute("aria-pressed", actif ? "true" : "false");
+  }
+}
+document.addEventListener("selectionchange", majBoutonsStyle);
+
+/** Gras / italique / souligné sur la sélection : le navigateur modifie le texte, l'événement
+ *  « input » met ensuite l'état à jour. */
+function styler(commande) {
+  if (!courant || !feuille.contains(getSelection().anchorNode)) return;
+  document.execCommand(commande);
+  majBoutonsStyle();
 }
 
 const actions = {
+  gras: () => styler("bold"),
+  italique: () => styler("italic"),
+  souligne: () => styler("underline"),
   monter() {
     const { index } = courant;
     if (index === 0) return;
@@ -271,18 +376,18 @@ const actions = {
   },
   "ajouter-paragraphe"() {
     const index = courant ? courant.index + 1 : blocs.length;
-    modifierStructure(() => blocs.splice(index, 0, { type: "paragraphe", texte: "", numerote: false }));
+    modifierStructure(() => blocs.splice(index, 0, { type: "paragraphe", segments: [], numerote: false }));
     rendre({ index }, 0);
   },
   "ajouter-tableau"() {
     const index = courant ? courant.index + 1 : blocs.length;
-    modifierStructure(() => blocs.splice(index, 0, { type: "tableau", lignes: [["", ""], ["", ""]] }));
+    modifierStructure(() => blocs.splice(index, 0, { type: "tableau", lignes: [[[], []], [[], []]] }));
     rendre({ index, ligne: 0, colonne: 0 });
   },
   "ajouter-ligne"() {
     const t = blocs[courant.index];
     const l = courant.ligne + 1;
-    modifierStructure(() => t.lignes.splice(l, 0, t.lignes[0].map(() => "")));
+    modifierStructure(() => t.lignes.splice(l, 0, t.lignes[0].map(() => [])));
     rendre({ ...courant, ligne: l, colonne: 0 });
   },
   "supprimer-ligne"() {
@@ -297,7 +402,7 @@ const actions = {
   "ajouter-colonne"() {
     const t = blocs[courant.index];
     const c = courant.colonne + 1;
-    modifierStructure(() => t.lignes.forEach((ligne) => ligne.splice(c, 0, "")));
+    modifierStructure(() => t.lignes.forEach((ligne) => ligne.splice(c, 0, [])));
     rendre({ ...courant, colonne: c });
   },
   "supprimer-colonne"() {
@@ -318,7 +423,7 @@ const actions = {
 };
 
 document.querySelectorAll(".barre-outils button").forEach((bouton) => {
-  // mousedown : garde le focus (et donc le curseur) dans le texte
+  // mousedown : garde le focus (et donc le curseur ou la sélection) dans le texte
   bouton.addEventListener("mousedown", (e) => e.preventDefault());
   bouton.addEventListener("click", () => actions[bouton.dataset.action]());
 });
@@ -338,9 +443,10 @@ document.getElementById("type-bloc").addEventListener("change", (e) => {
 function remplacerPartout(mot, par) {
   const echappe = mot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const motif = new RegExp(`(?<![\\p{L}\\p{N}])${echappe}(?![\\p{L}\\p{N}])`, "gu");
+  const remplacer = (segments) => segments.map((s) => ({ ...s, texte: s.texte.replace(motif, par) }));
   for (const bloc of blocs) {
-    if (bloc.type === "tableau") bloc.lignes = bloc.lignes.map((l) => l.map((c) => c.replace(motif, par)));
-    else bloc.texte = bloc.texte.replace(motif, par);
+    if (bloc.type === "tableau") bloc.lignes = bloc.lignes.map((l) => l.map(remplacer));
+    else bloc.segments = remplacer(bloc.segments);
   }
 }
 
