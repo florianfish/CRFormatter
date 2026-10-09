@@ -89,7 +89,7 @@ function finaliser(paragraphe, policeParDefaut) {
     segments.pop();
   }
   // Paragraphe vide de Word (« &nbsp; ») : ligne vide
-  const vide = !segments.some((s) => s.texte.replace(/[\s ]/g, ""));
+  const vide = !segments.some((s) => s.texte.replace(/[\s\u00a0]/g, ""));
   const police = vide ? policeParDefaut : policeMajoritaire(segments);
   return {
     segments: vide ? [] : segments.map(({ texte, gras, italique, souligne }) => ({ texte, gras, italique, souligne })),
@@ -133,7 +133,7 @@ function lireContenu(racine, vue) {
       } else if (/mso-list:\s*Ignore/i.test(attribut)) {
         // Puce ou numéro d'une liste Word : remplacé par un tiret ou gardé (« 1. »), suivi d'une tabulation
         if (!courant) ouvrir(bloc);
-        const marque = enfant.textContent.replace(/[\s ]+/g, "");
+        const marque = enfant.textContent.replace(/[\s\u00a0]+/g, "");
         courant.segments.push({ texte: `${PUCES.has(marque) ? "-" : marque}\t`, brut: true, ...style(enfant, vue, bloc) });
       } else if (enfant.tagName === "TABLE") {
         fermer();

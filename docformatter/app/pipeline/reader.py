@@ -176,6 +176,14 @@ def a_des_bordures(tbl) -> bool:
     return bordures is not None and any(b.get(qn("w:val")) not in (None, "nil", "none") for b in bordures)
 
 
+def mise_en_page_tableau(tbl) -> dict:
+    m = {"bordures": a_des_bordures(tbl)}
+    largeur = tbl.find(qn("w:tblPr") + "/" + qn("w:tblW"))
+    if largeur is not None and largeur.get(qn("w:type")) == "pct" and largeur.get(qn("w:w")) in ("5000", "100%"):
+        m["pleine_largeur"] = True  # ex. résultats regroupés en colonnes : colonnes de même largeur
+    return m
+
+
 def lire_docx(data: bytes) -> list[Bloc]:
     doc = Document(io.BytesIO(data))
     index = indexer(doc)
@@ -186,7 +194,7 @@ def lire_docx(data: bytes) -> list[Bloc]:
         if ident.startswith("p"):
             blocs.append(lire_paragraphe(element, ident, doc))
             continue
-        tableau = Bloc("tableau", source=ident, mise_en_page={"bordures": a_des_bordures(element)})
+        tableau = Bloc("tableau", source=ident, mise_en_page=mise_en_page_tableau(element))
         for r, tr in enumerate(element.iterchildren(qn("w:tr"))):
             ligne = []
             for c, tc in enumerate(tr.iterchildren(qn("w:tc"))):

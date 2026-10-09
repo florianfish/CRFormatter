@@ -70,6 +70,18 @@ function paragrapheDe(pos) {
   return bloc.lignes?.[pos.ligne]?.[pos.colonne]?.[pos.k] ?? null;
 }
 
+/** Liste de paragraphes contenant la position (corps du document ou cellule de tableau),
+ *  rang du paragraphe dans cette liste, et position d'un autre rang de la même liste. */
+function conteneur(pos) {
+  if (pos.ligne == null) return { liste: blocs, i: pos.index, position: (i) => ({ index: i }) };
+  return { liste: blocs[pos.index].lignes[pos.ligne][pos.colonne], i: pos.k, position: (k) => ({ ...pos, k }) };
+}
+
+const nouveauParagraphe = (modele, segments = []) => ({
+  type: "paragraphe", id: null, origine: modele.id ?? modele.origine, segments, protege: false,
+  fin_section: false, mise_en_page: { ...modele.mise_en_page },
+});
+
 function tousLesParagraphes() {
   return blocs.flatMap((b) => (b.type === "tableau" ? b.lignes.flat(2) : [b]));
 }
@@ -322,33 +334,40 @@ function clavier(e, element, pos) {
     return;
   }
   // Ctrl+B / Ctrl+I / Ctrl+U et Maj+Entrée (retour à la ligne) : gérés par le navigateur
+  const { liste, i, position } = conteneur(pos);
+  const p = liste[i];
+  const rien = getSelection().isCollapsed;
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
-    if (pos.ligne != null) return; // pas de nouveau paragraphe dans une cellule
-    const p = blocs[pos.index];
     const curseur = positionCurseur(element);
     modifierStructure(() => {
       const [avant, apres] = couper(p.segments, curseur);
       p.segments = avant;
-      blocs.splice(pos.index + 1, 0, {
-        type: "paragraphe", id: null, origine: p.id ?? p.origine, segments: apres, protege: false, fin_section: false,
-        mise_en_page: { ...p.mise_en_page },
-      });
+      liste.splice(i + 1, 0, nouveauParagraphe(p, apres));
     });
-    rendre({ index: pos.index + 1 }, 0);
-  } else if (e.key === "Backspace" && pos.ligne == null && pos.index > 0
-             && getSelection().isCollapsed && positionCurseur(element) === 0) {
-    const p = blocs[pos.index];
-    const precedent = blocs[pos.index - 1];
-    if (precedent.type !== "paragraphe" || precedent.protege || p.fin_section) return;
-    e.preventDefault();
-    const jonction = texteDe(precedent.segments).length;
-    modifierStructure(() => {
-      precedent.segments = normaliser([...precedent.segments, ...p.segments]);
-      blocs.splice(pos.index, 1);
-    });
-    rendre({ index: pos.index - 1 }, jonction);
+    rendre(position(i + 1), 0);
+  } else if (e.key === "Backspace" && i > 0 && rien && positionCurseur(element) === 0) {
+    // Début de paragraphe : rattaché au précédent (supprime une ligne vide)
+    if (fusionner(liste, i - 1, e)) rendre(position(i - 1), texteDe(liste[i - 1].segments).length - texteDe(p.segments).length);
+  } else if (e.key === "Delete" && i < liste.length - 1 && rien
+             && positionCurseur(element) === texteDe(p.segments).length) {
+    // Fin de paragraphe : le suivant y est rattaché (supprime une ligne vide)
+    const jonction = texteDe(p.segments).length;
+    if (fusionner(liste, i, e)) rendre(position(i), jonction);
   }
+}
+
+/** Rattache le paragraphe `liste[i + 1]` à `liste[i]` ; false si ce n'est pas possible. */
+function fusionner(liste, i, e) {
+  const [premier, second] = [liste[i], liste[i + 1]];
+  if (premier.type !== "paragraphe" || second.type !== "paragraphe" || premier.protege || second.protege
+      || second.fin_section) return false;
+  e.preventDefault();
+  modifierStructure(() => {
+    premier.segments = normaliser([...premier.segments, ...second.segments]);
+    liste.splice(i + 1, 1);
+  });
+  return true;
 }
 
 // ---- Barre d'outils -----------------------------------------------------------------
@@ -361,7 +380,7 @@ function majBarre() {
   for (const action of ["gras", "italique", "souligne"]) bouton(action).disabled = !editable;
   bouton("monter").disabled = !corps || p.fin_section || courant.index === 0;
   bouton("descendre").disabled = !corps || p.fin_section || courant.index >= blocs.length - 1;
-  bouton("supprimer").disabled = !corps || p.protege || p.fin_section;
+  bouton("supprimer").disabled = !p || p.protege || p.fin_section;
   bouton("ajouter-paragraphe").disabled = !courant;
   majBoutonsStyle();
 }
@@ -408,18 +427,27 @@ const actions = {
     rendre({ index: index + 1 });
   },
   supprimer() {
-    const { index } = courant;
-    modifierStructure(() => blocs.splice(index, 1));
-    rendre(blocs.length ? { index: Math.min(index, blocs.length - 1) } : null);
+    const { liste, i, position } = conteneur(courant);
+    if (courant.ligne != null && liste.length === 1) {
+      // Une cellule garde toujours un paragraphe : il est seulement vidé
+      modifierStructure(() => { liste[0].segments = []; });
+      rendre(position(0), 0);
+      return;
+    }
+    modifierStructure(() => liste.splice(i, 1));
+    rendre(liste.length ? position(Math.min(i, liste.length - 1)) : null);
   },
   "ajouter-paragraphe"() {
+    if (courant.ligne != null) {
+      const { liste, i, position } = conteneur(courant);
+      modifierStructure(() => liste.splice(i + 1, 0, nouveauParagraphe(liste[i])));
+      rendre(position(i + 1), 0);
+      return;
+    }
     const index = courant.index + 1;
     const modele = modeleAvant(courant.index);
     if (!modele) return;
-    modifierStructure(() => blocs.splice(index, 0, {
-      type: "paragraphe", id: null, origine: modele.id ?? modele.origine, segments: [], protege: false,
-      fin_section: false, mise_en_page: { ...modele.mise_en_page },
-    }));
+    modifierStructure(() => blocs.splice(index, 0, nouveauParagraphe(modele)));
     rendre({ index }, 0);
   },
   annuler() {

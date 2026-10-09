@@ -148,6 +148,67 @@ def test_majuscule_debut_respecte_les_unites(regles):
     assert [b.texte for b in res.blocs] == ["pH à 7,32", "Mise sous antibiotiques"]
 
 
+# ---- Résultats sur plusieurs colonnes --------------------------------------------------
+
+RESULTATS = ["Hb (g/dL) : 13,4", "Plaquettes (Giga/L) : 294", "Leucocytes (Giga/L) : 7,1", "",
+             "CRP (mg/L) : <1.0", "Na (mmol/L) : 144", "K (mmol/L) : 4,1"]
+
+
+def _document(*paragraphes: str) -> bytes:
+    doc = Document()
+    for texte in paragraphes:
+        doc.add_paragraph(texte)
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_resultats_regroupes_en_colonnes(regles):
+    res = formater(_document("Biologie :", *RESULTATS, "2019 : opération", "Conclusion"), regles, None)
+    paragraphes = [b for b in res.blocs if b.type == "paragraphe"]
+    assert [p.texte for p in paragraphes] == [f"Biologie{NBSP}:", f"2019{NBSP}: opération", "Conclusion"]
+    tableau = next(b for b in res.blocs if b.type == "tableau")
+    assert res.blocs.index(tableau) == 1  # à la place des résultats
+    assert tableau.mise_en_page == {"bordures": False, "pleine_largeur": True}
+    # Deux colonnes coupées sur la ligne vide entre les deux groupes (qui disparaît)
+    assert [[p.texte.split(NBSP)[0] for p in c.paragraphes] for c in tableau.lignes[0]] == [
+        ["Hb (g/dL)", "Plaquettes (Giga/L)", "Leucocytes (Giga/L)"], ["CRP (mg/L)", "Na (mmol/L)", "K (mmol/L)"]]
+    assert res.changements[0].regle == "Résultats sur plusieurs colonnes"
+    assert "6 résultats sur 2 colonnes" in res.changements[0].apres
+    # Le .docx produit contient le tableau sans bordure, les résultats corrigés dedans
+    doc = Document(io.BytesIO(res.docx))
+    assert len(doc.tables) == 1 and doc.tables[0].cell(0, 1).paragraphs[0].text == f"CRP (mg/L){NBSP}: <1.0"
+    assert [p.text for p in doc.paragraphs] == [f"Biologie{NBSP}:", f"2019{NBSP}: opération", "Conclusion"]
+
+
+def test_colonnes_trois_et_sans_ligne_vide(regles):
+    regles.colonnes.nombre = 3
+    lignes = [f"Dosage{i} : {i}" for i in range(7)]
+    tableau = next(b for b in formater(_document(*lignes), regles, None).blocs if b.type == "tableau")
+    assert [len(c.paragraphes) for c in tableau.lignes[0]] == [3, 2, 2]
+
+
+def test_colonnes_non_appliquees(regles, original):
+    # Trop peu de résultats
+    assert not any(b.type == "tableau" for b in formater(_document(*RESULTATS[:3]), regles, None).blocs)
+    # Option désactivée
+    regles.options.colonnes_resultats = False
+    assert not any(b.type == "tableau" for b in formater(_document(*RESULTATS), regles, None).blocs)
+    regles.options.colonnes_resultats = True
+    # Résultats déjà dans une section Word en colonnes : seul le tableau d'origine
+    assert len(Document(io.BytesIO(formater(original, regles, None).docx)).tables) == 1
+
+
+def test_retouche_d_un_document_en_colonnes(regles):
+    res = formater(_document(*RESULTATS), regles, None)
+    edition = Edition.model_validate({"blocs": vers_editeur(res.blocs)})
+    cellule = edition.blocs[0].lignes[0][1]
+    cellule[0].segments[0].texte = "CRP (mg/L) : 2"
+    blocs = depuis_editeur(edition, res.blocs)
+    sortie = finaliser_retouche(res.base, blocs, regles, None).docx
+    assert Document(io.BytesIO(sortie)).tables[0].cell(0, 1).paragraphs[0].text == "CRP (mg/L) : 2"
+
+
 # ---- Texte avec mise en forme ---------------------------------------------------------
 
 def test_texte_style_garde_la_mise_en_forme():

@@ -1,5 +1,9 @@
 ## 0.6.0
 
+- **Résultats d'analyse sur plusieurs colonnes** : les lignes « Hb (g/dL) : 13,4 » consécutives
+  sont regroupées sur 2 colonnes (tableau sans bordure), y compris après un copier-coller.
+- Éditeur : `Suppr` en fin de ligne rattache la ligne suivante ; lignes ajoutées, supprimées ou
+  fusionnées aussi dans les cellules de tableau (colonnes de résultats).
 - **Coller un compte rendu depuis Word** : le texte copié dans Word est corrigé puis ouvert dans
   l'éditeur ; « Copier pour Word » le recolle dans le document d'origine avec sa mise en forme
   (gras, italique, souligné, alignement, retraits, espacements, police, taille, tableaux).

@@ -1,4 +1,4 @@
-"""Chaîne de traitement : lecture → rubriques → nettoyage → orthographe → écriture sur place."""
+"""Chaîne de traitement : colonnes → lecture → rubriques → nettoyage → orthographe → écriture sur place."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from ..rules import Regles
 from .cleaner import nettoyer_blocs
+from .colonnes import regrouper_resultats
 from .model import Bloc, Changement
 from .reader import lire_docx
 from .sections import renommer_rubriques
@@ -19,6 +20,9 @@ class Resultat:
     blocs: list[Bloc]
     changements: list[Changement]
     docx: bytes = b""
+    # Document de départ réellement lu (après regroupement en colonnes) : les identifiants des
+    # paragraphes s'y rapportent, une retouche doit donc être réécrite sur ce même document
+    base: bytes = b""
     orthographe_active: bool = False
     inconnus: Counter = field(default_factory=Counter)
     suggestions: dict[str, list[str]] = field(default_factory=dict)
@@ -46,8 +50,11 @@ def traiter_blocs(blocs: list[Bloc], regles: Regles, correcteur: Correcteur | No
 
 
 def formater(data: bytes, regles: Regles, correcteur: Correcteur | None) -> Resultat:
-    resultat = traiter_blocs(lire_docx(data), regles, correcteur)
-    resultat.docx = ecrire_docx(data, resultat.blocs, commentaires=regles.options.commentaires_orthographe)
+    base, colonnes = regrouper_resultats(data, regles)
+    resultat = traiter_blocs(lire_docx(base), regles, correcteur)
+    resultat.changements[:0] = colonnes
+    resultat.base = base
+    resultat.docx = ecrire_docx(base, resultat.blocs, commentaires=regles.options.commentaires_orthographe)
     return resultat
 
 
@@ -58,7 +65,7 @@ def finaliser_retouche(data: bytes, blocs: list[Bloc], regles: Regles, correcteu
         for p in bloc.textuels():
             p.inconnus = []
             p.original = p.texte  # l'aperçu ne montre plus de différences
-    resultat = Resultat(blocs, [])
+    resultat = Resultat(blocs, [], base=data)
     _verifier(resultat, regles, correcteur)
     resultat.docx = ecrire_docx(data, blocs, commentaires=regles.options.commentaires_orthographe)
     return resultat

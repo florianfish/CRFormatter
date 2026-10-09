@@ -58,10 +58,12 @@ function paragrapheWord(p) {
 
 function tableauWord(bloc) {
   const bordure = bloc.mise_en_page?.bordures ? "border:solid windowtext 1pt;" : "";
-  const table = el("table", { style: "border-collapse:collapse", cellspacing: "0", cellpadding: "0" });
+  const pleine = bloc.mise_en_page?.pleine_largeur;
+  const table = el("table", { style: `border-collapse:collapse${pleine ? ";width:100%" : ""}`, cellspacing: "0", cellpadding: "0" });
   for (const ligne of bloc.lignes) {
+    const largeur = pleine ? `width:${(100 / ligne.length).toFixed(2)}%;` : "";
     table.append(el("tr", {}, ligne.map((cellule) => el("td", {
-      style: `${bordure}padding:0 5.4pt;vertical-align:top`,
+      style: `${bordure}${largeur}padding:0 5.4pt;vertical-align:top`,
     }, cellule.length ? cellule.map(paragrapheWord) : paragrapheWord({ segments: [] })))));
   }
   return table;

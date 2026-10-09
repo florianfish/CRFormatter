@@ -19,7 +19,8 @@ Un seul test : `cd docformatter && ../.venv/bin/pytest tests/test_pipeline.py -k
 
 ## Architecture
 
-Le traitement d'un document : `reader` (docx → `Bloc`) → `sections` (renommage des rubriques) →
+Le traitement d'un document : `colonnes` (résultats d'analyse déplacés dans un tableau sans
+bordure, sur le .docx lui-même) → `reader` (docx → `Bloc`) → `sections` (renommage des rubriques) →
 `cleaner` (regex, corrections, majuscules) → `spelling` (Hunspell) → `writer` (réécriture sur place).
 
 **Le document d'origine n'est jamais reconstruit** (exigence : en-têtes / pieds de page de chaque
@@ -31,7 +32,9 @@ déplacés dans l'éditeur). Paragraphe contenant lien, champ, image, révision�
 réécrit. Paragraphe portant un `sectPr` → `fin_section` : ni supprimé ni fusionné.
 Le texte est manipulé avec sa mise en forme via `TexteStyle` (positions par caractère) ;
 `Format.rpr` garde les propriétés Word d'origine (police, taille…).
-Orchestration dans `docformatter/app/pipeline/__init__.py`. Le testeur du mode expert passe par
+Orchestration dans `docformatter/app/pipeline/__init__.py`. Les identifiants se rapportent au
+document après `colonnes` (`Resultat.base`, gardé dans `Lot.bases`) : une retouche est toujours
+réécrite sur cette base, même si les règles changent ensuite. Le testeur du mode expert passe par
 `traiter_texte`, sans docx.
 
 - `rules.py` : modèle pydantic `Regles` ; c'est la seule source de validation (API, import YAML,

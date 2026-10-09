@@ -88,6 +88,31 @@ def _ecrire_paragraphe(element, bloc: Bloc, doc, commentaires: bool) -> None:
         _reecrire(element, bloc, doc, commentaires)
 
 
+def _ecrire_tableau(tbl, bloc: Bloc, index, doc, commentaires: bool) -> None:
+    """Paragraphes de chaque cellule, dans l'ordre de l'éditeur (ajoutés, supprimés, fusionnés).
+    Les autres éléments de la cellule (propriétés, tableau imbriqué…) restent en place."""
+    for tr, ligne in zip(tbl.iterchildren(qn("w:tr")), bloc.lignes):
+        for tc, cellule in zip(tr.iterchildren(qn("w:tc")), ligne):
+            elements = []
+            for p in cellule.paragraphes:
+                if p.source is not None:
+                    element = index.elements[p.source]
+                else:
+                    element = _nouveau_paragraphe(index.elements.get(p.origine) if p.origine else None)
+                _ecrire_paragraphe(element, p, doc, commentaires)
+                elements.append(element)
+            anciens = list(tc.iterchildren(qn("w:p")))
+            if [id(e) for e in anciens] == [id(e) for e in elements]:
+                continue  # cellule inchangée dans sa structure
+            position = tc.index(anciens[0]) if anciens else len(tc)
+            for ancien in anciens:
+                tc.remove(ancien)
+            for decalage, element in enumerate(elements):
+                tc.insert(position + decalage, element)
+            if tc[-1].tag != qn("w:p"):  # Word exige un paragraphe en fin de cellule
+                tc.append(OxmlElement("w:p"))
+
+
 def ecrire_docx(original: bytes, blocs: list[Bloc], commentaires: bool) -> bytes:
     doc = Document(io.BytesIO(original))
     index = indexer(doc)
@@ -97,8 +122,7 @@ def ecrire_docx(original: bytes, blocs: list[Bloc], commentaires: bool) -> bytes
     for bloc in blocs:
         if bloc.type == "tableau":
             element = index.elements[bloc.source]
-            for p in bloc.textuels():
-                _ecrire_paragraphe(index.elements[p.source], p, doc, commentaires)
+            _ecrire_tableau(element, bloc, index, doc, commentaires)
         else:
             if bloc.source is not None:
                 element = index.elements[bloc.source]

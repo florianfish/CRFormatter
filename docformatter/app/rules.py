@@ -54,6 +54,8 @@ LIBELLES_OPTIONS = {
     "verifier_orthographe": ("Signaler les mots inconnus", "dispnée", "dispnée (surligné en jaune)"),
     "commentaires_orthographe": ("Proposer des corrections en commentaire dans Word", "dispnée",
                                  "commentaire « Suggestions : dyspnée »"),
+    "colonnes_resultats": ("Résultats d'analyse sur plusieurs colonnes", "Hb : 13,4 / Plaquettes : 294 / CRP : 2 / Na : 140",
+                           "Hb : 13,4 | CRP : 2 — Plaquettes : 294 | Na : 140"),
 }
 
 
@@ -62,6 +64,25 @@ class Options(BaseModel):
     point_final: bool = False
     verifier_orthographe: bool = True
     commentaires_orthographe: bool = True
+    colonnes_resultats: bool = True
+
+
+class Colonnes(BaseModel):
+    """Lignes de résultats consécutives (« Hb (g/dL) : 13,4 ») regroupées dans un tableau sans
+    bordure de `nombre` colonnes, pour gagner de la hauteur de page."""
+
+    nombre: int = Field(2, ge=2, le=4)
+    minimum: int = Field(4, ge=2, le=200)  # lignes de résultats nécessaires pour regrouper
+    # Une ligne de résultat : un libellé commençant par une lettre, « : », puis une valeur chiffrée
+    motif: str = Field(r"^\s*[^\W\d_][^:\n]{0,60}:\s*[<>≤≥]?\s*[-+]?\d", min_length=1)
+
+    @field_validator("motif")
+    @classmethod
+    def motif_valide(cls, v: str) -> str:
+        return Remplacement.motif_valide(v)
+
+    def compiler(self) -> re.Pattern[str]:
+        return re.compile(self.motif)
 
 
 class Regles(BaseModel):
@@ -70,6 +91,7 @@ class Regles(BaseModel):
     corrections: dict[str, str] = {}
     dictionnaire: list[str] = []
     sections: dict[str, list[str]] = {}
+    colonnes: Colonnes = Colonnes()
 
     @field_validator("corrections")
     @classmethod

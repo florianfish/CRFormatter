@@ -388,6 +388,43 @@ def test_retouche_refusee(app):
     assert client(app, utilisateur="autre").get(f"/lot/{cle}/document/0").status_code == 404
 
 
+def test_retouche_conservee_si_l_option_colonnes_change(app):
+    """La retouche se rapporte au document regroupé en colonnes : elle reste valable si l'option change."""
+    c = client(app)
+    cle, _ = formater(c, *[f"Dosage{i} : {i}" for i in range(6)])
+    blocs = editeur(c, cle)["blocs"]
+    assert [b["type"] for b in blocs] == ["tableau"]
+    blocs[0]["lignes"][0][0][0]["segments"] = [seg("Dosage0 : 99")]
+    assert c.put(f"/api/lot/{cle}/document/0", json={"blocs": blocs}).status_code == 200
+    assert c.post("/api/mise-en-forme/option", json={"cle": "colonnes_resultats", "actif": False}).status_code == 200
+    page = c.get(f"/lot/{cle}")
+    assert page.status_code == 200 and "Dosage0 : 99" in sans_surlignage(page.text)
+    doc = Document(io.BytesIO(c.get(f"/telecharger/{editeur(c, cle)['telechargement']}").content))
+    assert doc.tables[0].cell(0, 0).paragraphs[0].text == "Dosage0 : 99"
+
+
+def test_retouche_paragraphes_d_une_cellule(app):
+    """Dans une cellule (ex. colonne de résultats) : lignes vides supprimées, paragraphes ajoutés."""
+    c = client(app)
+    cle, _ = formater(c, "Dosage0 : 0", "Dosage1 : 1", "", "Dosage2 : 2", "Dosage3 : 3", "", "Dosage4 : 4")
+    tableau = editeur(c, cle)["blocs"][0]
+    gauche, droite = tableau["lignes"][0]
+    assert ["".join(s["texte"] for s in p["segments"]).replace("\u00a0", " ") for p in droite] == ["Dosage2 : 2", "Dosage3 : 3", "", "Dosage4 : 4"]
+    del droite[2]  # ligne vide supprimée
+    gauche.append({"type": "paragraphe", "id": None, "origine": gauche[0]["id"], "segments": [seg("Ajout : 5")]})
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [tableau]})
+    assert r.status_code == 200
+    cellules = Document(io.BytesIO(c.get(f"/telecharger/{r.json()['telechargement']}").content)).tables[0].rows[0].cells
+    assert [p.text.replace("\u00a0", " ") for p in cellules[0].paragraphs] == ["Dosage0 : 0", "Dosage1 : 1", "Ajout : 5"]
+    assert [p.text.replace("\u00a0", " ") for p in cellules[1].paragraphs] == ["Dosage2 : 2", "Dosage3 : 3", "Dosage4 : 4"]
+    # Cellule vidée : Word exige un paragraphe, il en reste un vide
+    tableau = r.json()["blocs"][0]
+    tableau["lignes"][0][1] = []
+    r = c.put(f"/api/lot/{cle}/document/0", json={"blocs": [tableau]})
+    cellules = Document(io.BytesIO(c.get(f"/telecharger/{r.json()['telechargement']}").content)).tables[0].rows[0].cells
+    assert [p.text for p in cellules[1].paragraphs] == [""]
+
+
 # ---- Collage depuis Word --------------------------------------------------------------
 
 def test_coller_affiche_le_recapitulatif_puis_l_editeur(app):

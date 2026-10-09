@@ -69,6 +69,7 @@ class Lot:
     blocs: dict[int, list[Bloc]] = field(default_factory=dict)      # résultat courant par document
     retouches: dict[int, list[Bloc]] = field(default_factory=dict)  # saisies manuelles par document
     telechargements: dict[int, str] = field(default_factory=dict)   # clé du .docx courant
+    bases: dict[int, bytes] = field(default_factory=dict)  # document lu (après colonnes), cf. Resultat.base
 
 
 class Depot:
@@ -312,7 +313,8 @@ def creer_app(settings: Settings) -> FastAPI:
                                       "colle": nom == NOM_COLLAGE}
             try:
                 if i in lot.retouches:
-                    res = finaliser_retouche(data, copy.deepcopy(lot.retouches[i]), regles, corr)
+                    # Réécrite sur le document dont elle est issue, même si les règles ont changé
+                    res = finaliser_retouche(lot.bases[i], copy.deepcopy(lot.retouches[i]), regles, corr)
                 else:
                     res = formater(data, regles, corr)
             except Exception:  # noqa: BLE001
@@ -324,6 +326,7 @@ def creer_app(settings: Settings) -> FastAPI:
                 suggestions.update(res.suggestions)
                 orthographe = orthographe or res.orthographe_active
                 lot.blocs[i] = res.blocs
+                lot.bases[i] = res.base
                 lot.telechargements[i] = depot.ajouter(Fichier(nom_sortie(nom), res.docx, MIME_DOCX), utilisateur)
                 entree.update(
                     cle=lot.telechargements[i],

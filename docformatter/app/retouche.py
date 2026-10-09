@@ -128,16 +128,14 @@ class _Conversion:
             raise RegleInvalide("Le document a changé entre-temps : rechargez la page.")
         for ligne, ligne_saisie in zip(tableau.lignes, saisi.lignes):
             for cellule, cellule_saisie in zip(ligne, ligne_saisie):
-                par_id = {p.id: p for p in cellule_saisie}
-                cellule.paragraphes = [
-                    self.paragraphe(par_id[p.source]) if p.source in par_id else self._garder(p)
-                    for p in cellule.paragraphes
-                ]
+                # Paragraphes de la cellule tels que saisis (ajoutés, supprimés, fusionnés)
+                paragraphes = [self.paragraphe(p) for p in cellule_saisie]
+                if not paragraphes and cellule.paragraphes:  # une cellule Word garde un paragraphe
+                    modele = cellule.paragraphes[0]
+                    paragraphes = [Bloc("paragraphe", origine=modele.source, rpr_base=modele.rpr_base,
+                                        mise_en_page=dict(modele.mise_en_page))]
+                cellule.paragraphes = paragraphes
         return tableau
-
-    def _garder(self, p: Bloc) -> Bloc:
-        self.vus.add(p.source)
-        return copy.deepcopy(p)
 
 
 def depuis_editeur(edition: Edition, precedents: list[Bloc]) -> list[Bloc]:
@@ -146,11 +144,12 @@ def depuis_editeur(edition: Edition, precedents: list[Bloc]) -> list[Bloc]:
 
     # Ce que l'éditeur ne permet pas de supprimer doit toujours être là
     for bloc in precedents:
-        if bloc.source in conversion.vus:
-            continue
         if bloc.type == "tableau":
-            raise RegleInvalide("Un tableau a disparu : rechargez la page.")
-        if bloc.protege or bloc.fin_section:
+            if bloc.source not in conversion.vus:
+                raise RegleInvalide("Un tableau a disparu : rechargez la page.")
+            if any(p.protege and p.source not in conversion.vus for p in bloc.textuels()):
+                raise RegleInvalide("Un paragraphe protégé a disparu : rechargez la page.")
+        elif bloc.source not in conversion.vus and (bloc.protege or bloc.fin_section):
             raise RegleInvalide("Un paragraphe protégé a disparu : rechargez la page.")
     if not any(p.texte.strip() for b in blocs for p in b.textuels()):
         raise RegleInvalide("Le document est vide : ajoutez du texte avant d'enregistrer.")

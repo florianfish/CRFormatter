@@ -14,7 +14,11 @@ Seul le texte des paragraphes du corps est corrigé.
 2. **Nettoyage** : espaces en trop, typographie française (espaces insécables, guillemets « »),
    unités (`75mg` → `75 mg`), majuscule en début de paragraphe… via des règles modifiables.
 3. **Corrections connues** : remplace automatiquement une liste de fautes fréquentes.
-4. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical. Les mots inconnus sont
+4. **Résultats d'analyse sur plusieurs colonnes** : au moins 4 lignes consécutives de type
+   « Hb (g/dL) : 13,4 » sont placées sur 2 colonnes (tableau sans bordure) pour gagner de la
+   hauteur de page. Ce n'est pas fait si elles sont déjà dans une section Word en colonnes.
+   Désactivable dans « Mise en forme » ; nombre de colonnes, minimum et motif dans les règles (`colonnes`).
+5. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical. Les mots inconnus sont
    **surlignés en jaune avec un commentaire de suggestions, jamais corrigés automatiquement**.
 
 Les paragraphes contenant un lien, un champ automatique ou une image sont laissés intacts.

@@ -7,6 +7,7 @@ options:
   point_final: false             # ajoute un point aux paragraphes de 4 mots ou plus
   verifier_orthographe: true     # Hunspell fr_FR + dictionnaire ci-dessous
   commentaires_orthographe: true # commentaire Word avec suggestions sur chaque mot inconnu
+  colonnes_resultats: true       # résultats d'analyse regroupés sur plusieurs colonnes (cf. colonnes)
 
 # Expressions régulières (syntaxe Python), appliquées dans l'ordre.
 # Dans « remplacement » : \1, \2… = groupes capturés ; {nbsp} = espace insécable ;
@@ -109,3 +110,11 @@ sections:
   Conduite à tenir: [cat, prise en charge, pec]
   Traitement: [ttt, traitement de sortie, ordonnance, prescriptions]
   Suivi: [surveillance, rdv, a revoir]
+
+# Résultats d'analyse sur plusieurs colonnes (option colonnes_resultats) : au moins « minimum »
+# lignes consécutives reconnues par « motif » (lignes vides entre groupes acceptées) sont placées
+# dans un tableau sans bordure. Ignoré si elles sont déjà dans une section en colonnes.
+colonnes:
+  nombre: 2
+  minimum: 4
+  motif: '^\s*[^\W\d_][^:\n]{0,60}:\s*[<>≤≥]?\s*[-+]?\d'

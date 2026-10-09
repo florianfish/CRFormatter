@@ -190,6 +190,10 @@ with sync_playwright() as p:
     <tr><td style='border:solid windowtext 1.0pt'><p class=MsoNormal>Créatinine</p></td>
     <td style='border:solid windowtext 1.0pt'><p class=MsoNormal>96µmol/L</p></td></tr></table>
     <p class=MsoNormal>Poids : 72kg<br>Taille : 1m80</p>
+    <p class=MsoNormal><b><u>Biologie</u></b> :</p>
+    <p class=MsoNormal>Hb (g/dL) : 13,4</p><p class=MsoNormal>Plaquettes (Giga/L) : 294</p>
+    <p class=MsoNormal><o:p>&nbsp;</o:p></p>
+    <p class=MsoNormal>CRP (mg/L) : &lt;1.0</p><p class=MsoNormal>Na (mmol/L) : 144</p>
     </div></body></html>"""
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     page.goto(URL)
@@ -204,6 +208,7 @@ with sync_playwright() as p:
     expect(page.locator("h2", has_text="Compte rendu collé")).to_be_visible()
     expect(page.locator(".changements")).to_be_visible()
     expect(page.locator(".changements")).to_contain_text("diabète")
+    expect(page.locator(".changements")).to_contain_text("4 résultats sur 2 colonnes")
     page.screenshot(path=f"{SP}/collage-resultat.png", full_page=True)
     page.click("button.copier")
     expect(page.locator("#notification")).to_contain_text("Copié")
@@ -220,11 +225,16 @@ with sync_playwright() as p:
     expect(blocs.nth(0)).to_have_css("text-align", "center")
     expect(blocs.nth(0).locator("b u, u b")).to_have_count(1)
     expect(blocs.nth(1)).to_have_text("")
-    expect(blocs.nth(2)).to_have_text("Antécédents : HTA, diabète\ttype 2")
+    expect(blocs.nth(2)).to_have_text("Antécédents\u00a0: HTA, diabète\ttype 2")
     expect(blocs.nth(3)).to_have_text("-\tSuivi pulmonaire")
     expect(blocs.nth(3)).to_have_css("margin-left", "48px")  # 36 pt
-    expect(page.locator("#feuille td p").nth(1)).to_have_text("96 µmol/L")
-    expect(blocs.nth(4)).to_contain_text("72 kg")
+    expect(page.locator("#feuille td p").nth(1)).to_have_text("96\u00a0µmol/L")
+    expect(blocs.nth(4)).to_contain_text("72\u00a0kg")
+    # Résultats d'analyse sur deux colonnes, coupées sur la ligne vide entre les deux groupes
+    colonnes = page.locator("#feuille table.bloc-tableau").nth(1).locator("td")
+    expect(colonnes).to_have_count(2)
+    expect(colonnes.nth(0)).to_contain_text("Plaquettes")
+    expect(colonnes.nth(1)).to_contain_text("CRP")
     page.screenshot(path=f"{SP}/collage.png", full_page=True)
 
     page.click("#copier")
@@ -241,8 +251,32 @@ with sync_playwright() as p:
     assert "margin-bottom: 8pt" in html and "line-height: 107%" in html, html
     assert 'mso-tab-count:1' in html and "margin-left: 36pt" in html and "text-indent: -18pt" in html, html
     assert "border:solid windowtext 1pt" in html and "Créatinine" in html, html
-    assert "72 kg<br>Taille" in html or "72&nbsp;kg<br>Taille" in html, html
+    assert "width:100%" in html and "width:50.00%" in html, html  # colonnes de résultats
+    assert "72\u00a0kg<br>Taille" in html or "72&nbsp;kg<br>Taille" in html, html
     assert copie["texte"].startswith("COMPTE-RENDU DE CONSULTATION\r\n\r\nAntécédents"), copie["texte"]
+
+    # Lignes vides dans une colonne de résultats : créées avec Entrée, retirées avec Retour arrière et Suppr
+    colonne = page.locator("#feuille table.bloc-tableau").nth(1).locator("td").nth(0)
+    expect(colonne.locator("p.bloc")).to_have_count(2)
+    colonne.locator("p.bloc").nth(0).click()
+    page.keyboard.press("End")
+    page.keyboard.press("Enter")
+    page.keyboard.press("Enter")
+    expect(colonne.locator("p.bloc")).to_have_count(4)
+    page.keyboard.press("Backspace")
+    expect(colonne.locator("p.bloc")).to_have_count(3)
+    colonne.locator("p.bloc").nth(0).click()
+    page.keyboard.press("End")
+    page.keyboard.press("Delete")
+    expect(colonne.locator("p.bloc")).to_have_count(2)
+    expect(colonne.locator("p.bloc").nth(1)).to_contain_text("Plaquettes")
+    # Suppr en fin de ligne dans le corps : la ligne vide sous le titre disparaît
+    page.locator("#feuille > p.bloc").nth(0).click()
+    page.keyboard.press("End")
+    page.keyboard.press("Delete")
+    expect(page.locator("#feuille > p.bloc").nth(1)).to_contain_text("Antécédents")
+    page.click("#enregistrer")
+    expect(page.locator("#etat")).to_have_text("Enregistré")
     print("12. collage depuis Word : récapitulatif, copie depuis le résultat et l'éditeur, mise en page reprise")
 
     nav.close()
