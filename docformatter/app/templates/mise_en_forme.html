@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titre %}Mise en forme · DocFormatter{% endblock %}
+{% block contenu %}
+<h1>Mise en forme</h1>
+<p class="aide">Activez ou désactivez les corrections appliquées automatiquement. Le changement est immédiat.</p>
+
+<section class="carte">
+  <h2>Corrections typographiques</h2>
+  <ul class="interrupteurs">
+  {% for r in regles %}
+    <li>
+      <label class="interrupteur">
+        <input type="checkbox" role="switch" data-type="regle" data-index="{{ r.index }}" data-nom="{{ r.nom }}" {% if r.actif %}checked{% endif %}>
+        <span class="glissiere" aria-hidden="true"></span>
+        <span class="libelle">
+          <strong>{{ r.nom }}</strong>
+          {% if r.description %}<small>{{ r.description }}</small>{% endif %}
+        </span>
+      </label>
+      {% if r.avant and r.apres and r.avant != r.apres %}
+        <span class="exemple"><span class="avant">{{ r.avant }}</span> → <span class="apres">{{ r.apres }}</span></span>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+
+<section class="carte">
+  <h2>Structure et orthographe</h2>
+  <ul class="interrupteurs">
+  {% for o in options %}
+    <li>
+      <label class="interrupteur">
+        <input type="checkbox" role="switch" data-type="option" data-cle="{{ o.cle }}" {% if o.actif %}checked{% endif %}>
+        <span class="glissiere" aria-hidden="true"></span>
+        <span class="libelle"><strong>{{ o.libelle }}</strong></span>
+      </label>
+      <span class="exemple"><span class="avant">{{ o.avant }}</span> → <span class="apres">{{ o.apres }}</span></span>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% if expert %}<p class="aide">Pour créer ou modifier une règle, passez par le <a href="expert">mode expert</a>.</p>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="static/mise_en_forme.js"></script>{% endblock %}

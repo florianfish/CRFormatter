@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="{{ base }}/">
+  <title>{% block titre %}DocFormatter{% endblock %}</title>
+  <link rel="stylesheet" href="static/style.css">
+  <link rel="icon" href="static/icone.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="barre">
+    <a href="./" class="logo">DocFormatter</a>
+    <nav>
+      <a href="./" {% if actif == "formater" %}aria-current="page"{% endif %}>Formater</a>
+      <a href="vocabulaire" {% if actif == "vocabulaire" %}aria-current="page"{% endif %}>Vocabulaire</a>
+      <a href="mise-en-forme" {% if actif == "mise-en-forme" %}aria-current="page"{% endif %}>Mise en forme</a>
+      <a href="historique" {% if actif == "historique" %}aria-current="page"{% endif %}>Historique</a>
+      {% if expert %}<a href="expert" class="expert" {% if actif == "expert" %}aria-current="page"{% endif %}>Expert</a>{% endif %}
+    </nav>
+  </header>
+  <main>
+    {% if alerte %}<p class="message erreur">⚠ {{ alerte }}</p>{% endif %}
+    {% block contenu %}{% endblock %}
+  </main>
+  <div id="notification" class="notification" role="status" hidden></div>
+  <script src="static/commun.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

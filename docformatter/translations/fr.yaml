@@ -1,0 +1,10 @@
+configuration:
+  experts:
+    name: Experts
+    description: >-
+      Identifiants Home Assistant (nom d'utilisateur, pas le nom affiché) ayant accès au mode expert
+      (règles avancées, modèle Word, import/export). Le vocabulaire reste modifiable par tous les utilisateurs.
+  dossier_surveille:
+    name: Dossier surveillé
+    description: >-
+      Formate automatiquement les .docx déposés dans /share/docformatter/entree vers /share/docformatter/sortie.

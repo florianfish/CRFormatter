@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block titre %}Expert · DocFormatter{% endblock %}
+{% block contenu %}
+<div class="entete-page">
+  <h1>Mode expert</h1>
+  <div class="actions">
+    <span id="etat" class="etat"></span>
+    <button type="button" id="annuler" class="bouton" disabled>Annuler les modifications</button>
+    <button type="button" id="enregistrer" class="principal" disabled>Enregistrer</button>
+  </div>
+</div>
+
+<nav class="onglets" role="tablist">
+  <button type="button" data-onglet="regles" class="actif">Règles de mise en forme</button>
+  <button type="button" data-onglet="tester">Tester</button>
+  <button type="button" data-onglet="fichiers">Modèle et fichiers</button>
+</nav>
+
+<section id="onglet-regles" class="onglet">
+  <p class="aide">
+    Expressions régulières (syntaxe Python) appliquées dans l'ordre à chaque paragraphe.
+    Dans le remplacement : <code>\1</code>, <code>\2</code>… reprennent les groupes capturés,
+    <code>{nbsp}</code> insère une espace insécable, <code>{nnbsp}</code> une espace fine insécable.
+    Le <strong>nom</strong>, la <strong>description</strong> et l'<strong>exemple</strong> sont affichés à la secrétaire
+    sur la page « Mise en forme » : rédigez-les sans jargon.
+  </p>
+  <div id="liste-regles"></div>
+  <button type="button" id="ajout-regle">+ Ajouter une règle</button>
+</section>
+
+<section id="onglet-tester" class="onglet" hidden>
+  <p class="aide">
+    Collez un extrait de compte rendu (un paragraphe par ligne) : il passe par les règles en cours d'édition,
+    même non enregistrées, ainsi que par le vocabulaire actuel.
+  </p>
+  <textarea id="texte-test" rows="10" spellcheck="false">ATCD : HTA , diabéte type 2
+ttt habituel:
+- kardegic 75mg
+-metformine 1000mg x2/j
+EXAMEN CLINIQUE
+patient eupnéique,apyrétique. TA: 13/8 ; FC: 72bpm. Pas d'oedeme...</textarea>
+  <button type="button" id="lancer-test" class="principal">Tester</button>
+  <div id="resultat-test"></div>
+</section>
+
+<section id="onglet-fichiers" class="onglet" hidden>
+  <div class="carte">
+    <h2>Modèle Word</h2>
+    <p class="aide">
+      Le document produit reprend les styles, marges, en-tête et pied de page de ce modèle (son contenu est ignoré).
+      Styles utilisés : <em>Titre 1</em>, <em>Normal</em>, <em>Liste à puces</em>, <em>Liste à numéros</em>, <em>Grille du tableau</em>.
+    </p>
+    <p>Modèle actuel : <strong id="modele-actuel">{{ "personnalisé" if modele_perso else "par défaut" }}</strong></p>
+    <div class="outils">
+      <a class="bouton" href="expert/modele">Télécharger le modèle actuel</a>
+      <label class="bouton">Déposer un modèle (.docx)<input type="file" id="modele" accept=".docx" hidden></label>
+      <button type="button" id="modele-defaut">Revenir au modèle par défaut</button>
+    </div>
+  </div>
+  <div class="carte">
+    <h2>Import / export de toutes les règles</h2>
+    <p class="aide">L'import remplace l'ensemble (vocabulaire compris) ; il apparaît dans l'historique et peut être annulé.</p>
+    <div class="outils">
+      <a class="bouton" href="expert/export">Exporter (regles.yaml)</a>
+      <label class="bouton">Importer un fichier YAML<input type="file" id="import" accept=".yaml,.yml" hidden></label>
+    </div>
+  </div>
+  <div class="carte">
+    <h2>Dictionnaires supplémentaires</h2>
+    <p class="aide">
+      Les listes de mots (<code>.txt</code> ou <code>.dic</code>, un mot par ligne) déposées dans le dossier
+      <code>dictionnaires/</code> de la configuration de l'add-on s'ajoutent aux mots connus.
+    </p>
+    {% if dictionnaires %}
+      <ul>{% for d in dictionnaires %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
+    {% else %}
+      <p>Aucun fichier.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="static/expert.js"></script>{% endblock %}

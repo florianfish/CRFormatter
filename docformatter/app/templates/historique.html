@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titre %}Historique · DocFormatter{% endblock %}
+{% block contenu %}
+<h1>Historique des modifications</h1>
+<p class="aide">
+  Toutes les modifications du vocabulaire et de la mise en forme sont conservées ({{ versions|length }} dernières).
+  Vous pouvez revenir à l'état d'une date précédente : cela crée une nouvelle étape, que l'on peut elle-même annuler.
+</p>
+<ol class="historique carte">
+{% for v in versions %}
+  <li>
+    <div>
+      <strong>{{ v.description }}</strong>
+      <small>{{ v.date_lisible }} · {{ v.auteur }}</small>
+    </div>
+    {% if loop.first %}
+      <span class="pastille ok">État actuel</span>
+    {% else %}
+      <button type="button" class="petit" data-id="{{ v.id }}" data-date="{{ v.date_lisible }}">Revenir à cet état</button>
+    {% endif %}
+  </li>
+{% endfor %}
+</ol>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll(".historique button[data-id]").forEach((b) => b.addEventListener("click", async () => {
+  if (!confirm(`Revenir au vocabulaire et à la mise en forme du ${b.dataset.date} ?`)) return;
+  try {
+    await api("POST", "api/historique/restaurer", { id: b.dataset.id });
+    location.reload();
+  } catch (e) {
+    notifier(e.message, { type: "erreur" });
+  }
+}));
+</script>
+{% endblock %}

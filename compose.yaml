@@ -1,0 +1,22 @@
+# Développement local avec Docker (Hunspell inclus) : `make docker`
+# Le code est monté dans le conteneur et rechargé à chaque modification.
+services:
+  docformatter:
+    build: ./docformatter
+    user: "${DEV_UID:-1000}:${DEV_GID:-1000}"
+    ports:
+      - "127.0.0.1:${PORT:-8099}:8099"
+    environment:
+      DOCFORMATTER_DEV: "1"
+      DOCFORMATTER_RELOAD: "1"
+      DOCFORMATTER_HOST: "0.0.0.0"
+      DOCFORMATTER_CONFIG: /config
+      DOCFORMATTER_SHARE: /share/docformatter
+      DOCFORMATTER_SURVEILLE: "${SURVEILLE:-0}"
+      DOCFORMATTER_DEV_USER: "${DEV_USER:-dev}"
+      DOCFORMATTER_DEV_EXPERT: "${DEV_EXPERT:-1}"
+    volumes:
+      - ./docformatter/app:/opt/docformatter/app
+      - ./docformatter/defaults:/opt/docformatter/defaults:ro
+      - ./dev-data/config:/config
+      - ./dev-data/share:/share/docformatter

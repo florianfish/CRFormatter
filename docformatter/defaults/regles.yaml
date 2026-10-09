@@ -1,0 +1,107 @@
+# Règles par défaut de DocFormatter.
+# Copiées dans /addon_configs/<id>_docformatter/regles.yaml au premier démarrage uniquement,
+# puis modifiées depuis l'interface (Vocabulaire, Mise en forme, Expert).
+
+options:
+  majuscule_debut: true          # majuscule au premier mot d'un paragraphe ou d'une puce
+  point_final: false             # ajoute un point aux paragraphes de 4 mots ou plus
+  detecter_titres: true          # lignes courtes en MAJUSCULES, en gras ou finissant par « : » → titre
+  verifier_orthographe: true     # Hunspell fr_FR + dictionnaire ci-dessous
+  commentaires_orthographe: true # commentaire Word avec suggestions sur chaque mot inconnu
+
+# Expressions régulières (syntaxe Python), appliquées dans l'ordre.
+# Dans « remplacement » : \1, \2… = groupes capturés ; {nbsp} = espace insécable ;
+# {nnbsp} = espace fine insécable.
+remplacements:
+  - nom: Points de suspension
+    description: 'Remplace trois points par le caractère « … »'
+    motif: '\.{3,}'
+    remplacement: '…'
+    exemple: 'Douleur... puis amélioration'
+  - nom: Pas d'espace avant une virgule ou un point
+    description: 'Supprime l''espace en trop avant une virgule ou un point'
+    motif: '[ \u00a0]+([,.])(?!\d)'
+    remplacement: '\1'
+    exemple: 'HTA , diabète .'
+  - nom: Espace après une virgule
+    description: 'Ajoute l''espace manquante après une virgule (sauf dans un nombre comme 1,5)'
+    motif: ',(?=[^\s\d])'
+    remplacement: ', '
+    exemple: 'HTA,diabète, créatinine 1,2 mg/dL'
+  - nom: Millilitres en mL
+    description: 'Écrit les millilitres « mL » et les sépare du nombre'
+    motif: '(\d)[ \u00a0]*ml\b'
+    remplacement: '\1{nbsp}mL'
+    ignorer_casse: true
+    exemple: '500ml de sérum physiologique'
+  - nom: Espacer les unités
+    description: 'Sépare le nombre de son unité, sans retour à la ligne entre les deux'
+    motif: '(\d)[ \u00a0]*(mg|µg|mcg|ng|g|kg|mL|L|cm|mm|mmol|µmol|UI|mmHg|bpm|%)(?![\w])'
+    remplacement: '\1{nbsp}\2'
+    exemple: 'Kardégic 75mg, poids 72kg, SpO2 98%'
+  - nom: 'Espaces avant : ; ! ?'
+    description: 'Ajoute l''espace avant : ; ! ? comme le veut la typographie française'
+    motif: '(?<=\S)[ \u00a0]*([:;!?])(?=\s|$)'
+    remplacement: '{nbsp}\1'
+    exemple: 'TA: 13/8 ; FC: 72 bpm. RDV à 10:30'
+  - nom: Guillemets français
+    description: 'Remplace les guillemets droits "…" par des guillemets « … »'
+    motif: '"([^"]+)"'
+    remplacement: '«{nbsp}\1{nbsp}»'
+    exemple: 'décrit comme "en coup de poignard"'
+
+# Fautes fréquentes corrigées automatiquement (insensible à la casse, mots entiers).
+corrections:
+  abdomnial: abdominal
+  bradychardie: bradycardie
+  cholesterol: cholestérol
+  coeur: cœur
+  diabéte: diabète
+  hypertention: hypertension
+  kardegic: Kardégic
+  oedeme: œdème
+  oedème: œdème
+  oesophage: œsophage
+  rhythme: rythme
+  tachychardie: tachycardie
+
+# Mots acceptés par la vérification orthographique (jamais signalés).
+dictionnaire:
+  - apixaban
+  - apyrétique
+  - atorvastatine
+  - bisoprolol
+  - bpm
+  - coroscanner
+  - eupnéique
+  - furosémide
+  - Kardégic
+  - Lévothyrox
+  - metformine
+  - normocarde
+  - normotendu
+  - ramipril
+  - rivaroxaban
+  - troponine
+
+# Titres de section normalisés et leurs variantes (comparaison sans accents ni casse).
+# Une ligne « ATCD : HTA » devient le titre « Antécédents » suivi du paragraphe « HTA ».
+sections:
+  Motif de consultation: [motif, motif de consultation, mdc]
+  Motif d'hospitalisation: [motif d'hospitalisation, motif de l'hospitalisation, motif d'admission]
+  Antécédents: [atcd, atcds, antecedents, antecedents medicaux, antecedents personnels, atcd medicaux]
+  Antécédents chirurgicaux: [atcd chirurgicaux, atcd chir, antecedents chirurgicaux]
+  Antécédents familiaux: [atcd familiaux, atcd fam, antecedents familiaux]
+  Allergies: [allergie, allergies connues]
+  Traitement habituel: [ttt habituel, tt habituel, traitement en cours, ttt en cours, traitement personnel]
+  Mode de vie: [habitus, contexte social]
+  Histoire de la maladie: [hdm, histoire de la maladie actuelle, anamnese]
+  Examen clinique: [examen, examen physique, ec]
+  Examens complémentaires: [ex comp, examens paracliniques, paraclinique, bilan complementaire]
+  Biologie: [bio, bilan biologique]
+  Imagerie: [radiologie]
+  Diagnostic: [diagnostics, diag]
+  Conclusion: [synthese, en conclusion]
+  Conduite à tenir: [cat, prise en charge, pec]
+  Traitement: [ttt, traitement de sortie, ordonnance, prescriptions]
+  Suivi: [surveillance, rdv, a revoir]

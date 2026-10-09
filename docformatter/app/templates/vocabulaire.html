@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titre %}Vocabulaire · DocFormatter{% endblock %}
+{% block contenu %}
+<h1>Vocabulaire</h1>
+<p class="aide">Chaque modification est enregistrée immédiatement et peut être annulée depuis l'historique.</p>
+
+<section class="carte">
+  <h2>Remplacements automatiques</h2>
+  <p class="aide">Fautes fréquentes et abréviations, remplacées automatiquement dans tous les comptes rendus (mots entiers, majuscules respectées).</p>
+  <form id="form-remplacement" class="ajout">
+    <label>Quand le texte contient <input type="text" name="texte" placeholder="ex. : ttt" required></label>
+    <label>écrire <input type="text" name="par" placeholder="ex. : traitement" required></label>
+    <button type="submit" class="principal">Ajouter</button>
+  </form>
+  <input type="search" id="filtre-remplacements" class="filtre" placeholder="Rechercher…" aria-label="Rechercher un remplacement">
+  <ul id="liste-remplacements" class="liste"></ul>
+</section>
+
+<section class="carte">
+  <h2>Mots connus</h2>
+  <p class="aide">Mots corrects que l'outil ne doit plus signaler : médicaments, termes médicaux, noms propres…</p>
+  <form id="form-mot" class="ajout">
+    <label>Nouveau mot <input type="text" name="mot" placeholder="ex. : apixaban" required></label>
+    <button type="submit" class="principal">Ajouter</button>
+  </form>
+  <input type="search" id="filtre-mots" class="filtre" placeholder="Rechercher…" aria-label="Rechercher un mot">
+  <p id="compte-mots" class="aide"></p>
+  <ul id="liste-mots" class="etiquettes"></ul>
+</section>
+
+<section class="carte">
+  <h2>Rubriques</h2>
+  <p class="aide">
+    Titres des parties du compte rendu. L'outil reconnaît chaque rubrique sous les différentes
+    façons de l'écrire, sans tenir compte des accents ni des majuscules.
+    Par exemple, « ATCD : HTA » devient le titre « Antécédents » suivi de « HTA ».
+  </p>
+  <div id="liste-rubriques"></div>
+  <form id="form-rubrique" class="ajout">
+    <label>Nouvelle rubrique <input type="text" name="titre" placeholder="ex. : Évolution" required></label>
+    <button type="submit">Ajouter la rubrique</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="static/vocabulaire.js"></script>{% endblock %}

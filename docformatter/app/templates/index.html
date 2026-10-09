@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block contenu %}
+<h1>Mettre en forme des comptes rendus</h1>
+<form id="formulaire" class="carte" action="formater" method="post" enctype="multipart/form-data">
+  <label class="depot" id="depot">
+    <input type="file" name="fichiers" id="fichiers" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple required>
+    <strong>Déposez un ou plusieurs fichiers .docx</strong>
+    <span>ou cliquez pour les choisir</span>
+    <ul id="selection"></ul>
+  </label>
+  <button type="submit" class="principal" id="envoyer">Formater</button>
+</form>
+<p class="aide">
+  Les documents sont traités sur ce serveur, sans service externe ni IA.
+  Le résultat reste disponible au téléchargement pendant 1 heure puis il est effacé ; rien n'est conservé sur disque.
+</p>
+{% endblock %}
+{% block scripts %}<script src="static/index.js"></script>{% endblock %}

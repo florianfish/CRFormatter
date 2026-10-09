@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titre %}Résultat · DocFormatter{% endblock %}
+{% block contenu %}
+<div class="entete-page">
+  <h1>Résultat</h1>
+  <div class="actions">
+    {% if cle_zip %}<a class="bouton principal" href="telecharger/{{ cle_zip }}">Tout télécharger (.zip)</a>{% endif %}
+    <a class="bouton" href="./">Nouveau document</a>
+  </div>
+</div>
+
+{% if message %}
+<p class="message {{ message.type }}" {% if message.annulation %}data-annulation="{{ message.annulation }}"{% endif %}>
+  {{ message.texte }}
+  {% if message.annulation %}<button type="button" class="petit" id="annuler-decisions">Annuler</button>{% endif %}
+</p>
+{% endif %}
+
+{% if inconnus %}
+<form class="carte verification" method="post" action="lot/{{ cle_lot }}/decisions">
+  <h2>Mots à vérifier</h2>
+  <p class="aide">
+    Ces mots ne sont pas dans le dictionnaire : ils sont surlignés en jaune dans le document.
+    Indiquez ce qu'il faut en faire ; l'outil s'en souviendra pour les prochains comptes rendus.
+  </p>
+  <div class="mots">
+  {% for mot, n, suggestions in inconnus %}
+    {% set i = loop.index0 %}
+    <fieldset class="mot">
+      <legend><mark>{{ mot }}</mark>{% if n > 1 %} <small>({{ n }} fois)</small>{% endif %}</legend>
+      <input type="hidden" name="mot-{{ i }}" value="{{ mot }}">
+      <label><input type="radio" name="choix-{{ i }}" value="" checked> Ne rien faire</label>
+      <label><input type="radio" name="choix-{{ i }}" value="correct"> Le mot est correct</label>
+      <label class="remplacer">
+        <input type="radio" name="choix-{{ i }}" value="remplacer"> Remplacer par
+        <input type="text" name="par-{{ i }}" list="suggestions-{{ i }}" value="{{ suggestions[0] if suggestions }}" autocomplete="off">
+      </label>
+      <datalist id="suggestions-{{ i }}">{% for s in suggestions %}<option value="{{ s }}">{% endfor %}</datalist>
+    </fieldset>
+  {% endfor %}
+  </div>
+  <button type="submit" class="principal">Enregistrer mes choix et reformater</button>
+</form>
+{% endif %}
+
+{% for r in resultats %}
+<section class="carte">
+  <div class="entete-carte">
+    <h2>{{ r.nom }}</h2>
+    {% if r.cle %}<a class="bouton principal" href="telecharger/{{ r.cle }}">Télécharger</a>{% endif %}
+  </div>
+
+  {% if r.erreur %}
+    <p class="erreur">{{ r.erreur }}</p>
+  {% else %}
+    <p class="resume">
+      <span class="pastille">{{ r.changements|length }} correction{{ 's' if r.changements|length > 1 }} de mise en forme</span>
+      {% if not r.orthographe %}
+        <span class="pastille">orthographe non vérifiée</span>
+      {% elif r.nb_inconnus %}
+        <span class="pastille attention">{{ r.nb_inconnus }} mot{{ 's' if r.nb_inconnus > 1 }} à vérifier</span>
+      {% else %}
+        <span class="pastille ok">aucun mot inconnu</span>
+      {% endif %}
+    </p>
+
+    <details {% if resultats|length == 1 %}open{% endif %}>
+      <summary>Aperçu</summary>
+      <p class="legende"><ins>ajouté</ins> <del>supprimé</del> <mark>mot à vérifier</mark></p>
+      <div class="apercu">{{ r.apercu }}</div>
+    </details>
+
+    {% if r.changements %}
+    <details>
+      <summary>Détail des corrections</summary>
+      <table class="changements">
+        <thead><tr><th>Règle</th><th>Modification</th></tr></thead>
+        <tbody>
+        {% for c in r.changements %}
+          <tr><td>{{ c.regle }}</td><td>{{ c|diff }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}
+{% block scripts %}<script src="static/resultat.js"></script>{% endblock %}
