@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from pydantic import BaseModel, ValidationError
 
+from . import medicaments
 from . import vocabulaire as voc
 from .apercu import diff_html, rendre_blocs
 from .collage import Collage, docx_depuis_collage
@@ -129,7 +130,10 @@ def creer_app(settings: Settings) -> FastAPI:
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
     def correcteur(regles: Regles) -> Correcteur:
-        return Correcteur(charger_mots(regles.dictionnaire, settings.dictionnaires_dir))
+        mots = charger_mots(regles.dictionnaire, settings.dictionnaires_dir)
+        if regles.options.medicaments:
+            mots += medicaments.mots()
+        return Correcteur(mots)
 
     # ---- Sécurité ---------------------------------------------------------------------
 
@@ -419,6 +423,15 @@ def creer_app(settings: Settings) -> FastAPI:
     def reponse_vocabulaire(request: Request, op: voc.Operation) -> dict:
         precedente = appliquer(request, op)
         return {"vocabulaire": voc.vue(store.get()), "annulation": precedente, "message": op.description}
+
+    @app.get("/api/proposer")
+    def proposer(q: str = ""):
+        """Propositions pour un champ « Remplacer par » : vocabulaire, puis noms de médicaments."""
+        regles = store.get()
+        candidats = [*regles.dictionnaire, *regles.corrections.values()]
+        if regles.options.medicaments:
+            candidats += medicaments.noms()
+        return {"propositions": medicaments.proposer(q[:100], candidats)}
 
     @app.post("/api/vocabulaire/mot")
     def ajouter_mot(request: Request, mot: str = Body(..., embed=True)):

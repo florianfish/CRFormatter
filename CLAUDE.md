@@ -58,6 +58,11 @@ réécrite sur cette base, même si les règles changent ensuite. Le testeur du 
   retouche). « Copier pour Word » (`static/word.js`, résultat et éditeur) produit le HTML inverse à partir de
   `Bloc.mise_en_page` (points, cf. `reader.lire_mise_en_page`) via l'événement `copy`, qui
   fonctionne hors HTTPS (contrairement à `navigator.clipboard`).
+- `medicaments.py` : noms de médicaments (`defaults/medicaments.txt`, extrait de la base publique de
+  l'ANSM par `make medicaments` ; fichier généré, à ne pas modifier à la main). Mots connus pour
+  l'orthographe (option `medicaments`), suggestions par ressemblance (`spelling`) et propositions
+  pendant la frappe (`api/proposer`, `proposerPendantLaFrappe` dans `commun.js`). Les conditions de
+  la base imposent de citer la source et la date : en-tête du fichier, DOCS.md, CHANGELOG.
 - `vocabulaire.py` : opérations de la secrétaire ; chacune valide sa saisie avec un message
   compréhensible (`RegleInvalide`, HTTP 422) et fournit la phrase affichée dans l'historique.
 - `web.py` : fabrique `creer_app(settings)` ; les tests construisent l'app avec un `Settings` temporaire.

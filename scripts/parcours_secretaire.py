@@ -56,6 +56,9 @@ with sync_playwright() as p:
 
     # 4. Vocabulaire : ajout d'un remplacement puis annulation via la notification
     page.goto(URL + "vocabulaire")
+    # Noms de médicaments proposés pendant la frappe dans « écrire »
+    page.fill("#form-remplacement [name=par]", "dolip")
+    expect(page.locator("#form-remplacement datalist option[value=Doliprane]")).to_have_count(1)
     page.fill("#form-remplacement [name=texte]", "ttt")
     page.fill("#form-remplacement [name=par]", "traitement")
     page.click("#form-remplacement button")

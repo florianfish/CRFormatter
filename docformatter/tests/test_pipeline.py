@@ -233,6 +233,15 @@ def test_mot_inconnu_a_cheval_sur_deux_mises_en_forme(original):
 
 
 @pytest.mark.skipif(not Correcteur([]).disponible, reason="hunspell non installé")
+def test_orthographe_noms_de_medicaments():
+    from app import medicaments
+
+    [inconnus] = Correcteur(medicaments.mots()).verifier(["Kardegic et apixaban, puis dolipranne"])
+    assert [i.mot for i in inconnus] == ["dolipranne"]
+    assert "Doliprane" in inconnus[0].suggestions
+
+
+@pytest.mark.skipif(not Correcteur([]).disponible, reason="hunspell non installé")
 def test_orthographe_sur_place(original, regles):
     res = formater(original, regles, Correcteur(regles.dictionnaire))
     doc = Document(io.BytesIO(res.docx))

@@ -519,6 +519,7 @@ function afficherMots() {
         } }, "Remplacer")),
       el("label", { class: "toujours" }, toujours, "Toujours remplacer ce mot"));
   }));
+  liste.querySelectorAll(".remplacer-mot input").forEach(proposerPendantLaFrappe);
 }
 
 // ---- Copier pour Word (cf. word.js) -------------------------------------------------

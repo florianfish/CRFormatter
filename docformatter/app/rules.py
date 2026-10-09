@@ -54,6 +54,8 @@ LIBELLES_OPTIONS = {
     "verifier_orthographe": ("Signaler les mots inconnus", "dispnée", "dispnée (surligné en jaune)"),
     "commentaires_orthographe": ("Suggestions en commentaire dans le .docx téléchargé", "dispnée",
                                  "commentaire « Suggestions : dyspnée »"),
+    "medicaments": ("Reconnaître les noms de médicaments (base publique de l'ANSM)", "Kardegic, apixaban",
+                    "non signalés, et proposés dans « Remplacer par »"),
     "colonnes_resultats": ("Résultats d'analyse sur plusieurs colonnes", "Hb : 13,4 / Plaquettes : 294 / CRP : 2 / Na : 140",
                            "Hb : 13,4 | CRP : 2 — Plaquettes : 294 | Na : 140"),
 }
@@ -65,6 +67,7 @@ class Options(BaseModel):
     verifier_orthographe: bool = True
     commentaires_orthographe: bool = True
     colonnes_resultats: bool = True
+    medicaments: bool = True
 
 
 class Colonnes(BaseModel):

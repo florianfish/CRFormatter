@@ -397,6 +397,32 @@ def test_retouche_paragraphes_d_une_cellule(app):
     assert [p.text for p in cellules[1].paragraphs] == [""]
 
 
+# ---- Médicaments -----------------------------------------------------------------------
+
+def test_proposer_medicaments_et_vocabulaire(app):
+    c = client(app)
+    propositions = c.get("/api/proposer", params={"q": "dolip"}).json()["propositions"]
+    assert propositions[0] == "Doliprane" and "Codoliprane" in propositions
+    assert "Kardegic" in c.get("/api/proposer", params={"q": "kardé"}).json()["propositions"]  # sans accents
+    assert c.get("/api/proposer", params={"q": "d"}).json()["propositions"] == []
+    # Le vocabulaire de l'utilisateur passe avant les médicaments
+    c.post("/api/vocabulaire/remplacement", json={"texte": "dolipr", "par": "Dolipranum"})
+    assert c.get("/api/proposer", params={"q": "dolip"}).json()["propositions"][0] == "Dolipranum"
+    # Option désactivée : seulement le vocabulaire
+    c.post("/api/mise-en-forme/option", json={"cle": "medicaments", "actif": False})
+    assert c.get("/api/proposer", params={"q": "dolip"}).json()["propositions"] == ["Dolipranum"]
+
+
+def test_liste_des_medicaments():
+    from app import medicaments
+
+    noms = medicaments.noms()
+    assert len(noms) > 3000 and not any(n.startswith("#") for n in noms)
+    assert {"Doliprane", "Kardegic", "paracétamol", "acide acétylsalicylique"} <= set(noms)
+    assert {"acide", "acétylsalicylique", "apixaban"} <= set(medicaments.mots())
+    assert medicaments.proposer("PARACET", ["paracétamol"]) == ["paracétamol"]
+
+
 # ---- Collage depuis Word --------------------------------------------------------------
 
 def test_coller_affiche_le_recapitulatif_puis_l_editeur(app):

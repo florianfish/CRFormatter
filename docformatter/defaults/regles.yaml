@@ -8,6 +8,7 @@ options:
   verifier_orthographe: true     # Hunspell fr_FR + dictionnaire ci-dessous
   commentaires_orthographe: true # .docx téléchargé : commentaire de suggestions sur chaque mot inconnu
   colonnes_resultats: true       # résultats d'analyse regroupés sur plusieurs colonnes (cf. colonnes)
+  medicaments: true              # noms de médicaments (defaults/medicaments.txt, base ANSM) : mots connus et propositions
 
 # Expressions régulières (syntaxe Python), appliquées dans l'ordre.
 # Dans « remplacement » : \1, \2… = groupes capturés ; {nbsp} = espace insécable ;

@@ -79,6 +79,8 @@ async function charger() {
   afficher();
 }
 
+proposerPendantLaFrappe(document.querySelector("#form-remplacement [name=par]"));
+
 document.getElementById("form-remplacement").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;

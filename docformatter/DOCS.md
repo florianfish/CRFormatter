@@ -16,8 +16,10 @@ document d'origine. Les en-têtes, pieds de page et la mise en page du document 
 4. **Résultats d'analyse sur plusieurs colonnes** : au moins 4 lignes consécutives de type
    « Hb (g/dL) : 13,4 » sont placées sur 2 colonnes (tableau sans bordure) pour gagner de la
    hauteur de page. Désactivable dans « Mise en forme » ; nombre de colonnes, minimum et motif dans les règles (`colonnes`).
-5. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical. Les mots inconnus sont
-   **surlignés en jaune, jamais corrigés automatiquement** ; des suggestions sont proposées.
+5. **Orthographe** : Hunspell (fr_FR) + votre dictionnaire médical + les noms de médicaments
+   (voir ci-dessous). Les mots inconnus sont **surlignés en jaune, jamais corrigés
+   automatiquement** ; des suggestions sont proposées, en commençant par les mots de votre
+   vocabulaire et les médicaments qui ressemblent (« dolipranne » → « Doliprane »).
 
 Les chiffres et posologies ne sont jamais modifiés, seulement espacés.
 
@@ -39,7 +41,9 @@ L'outil s'ouvre dans la barre latérale de Home Assistant (« Comptes rendus »)
   supprimer un paragraphe ou une ligne vide, remplacer un mot signalé. Les corrections automatiques
   ne sont jamais réappliquées sur un texte retouché.
 - **Vocabulaire** : remplacements automatiques (fautes, abréviations), mots connus, rubriques et
-  leurs différentes écritures. Chaque modification est enregistrée immédiatement.
+  leurs différentes écritures. Chaque modification est enregistrée immédiatement. Dans les champs
+  « écrire » et « Remplacer par », les noms de médicaments et votre vocabulaire sont proposés pendant
+  la frappe (« dolip » → « Doliprane »).
 - **Mise en forme** : interrupteurs pour activer ou désactiver chaque correction, avec un exemple.
 - **Historique** : toutes les modifications, avec leur date et leur auteur ; on peut revenir à
   n'importe quel état précédent. Chaque modification propose aussi un bouton « Annuler » immédiat.
@@ -144,6 +148,18 @@ l'interface Home Assistant :
    nginx le joint par le réseau interne de Home Assistant.
 
 L'accès par la barre latérale de Home Assistant continue de fonctionner en parallèle.
+
+## Noms de médicaments
+
+L'outil connaît environ 6 000 noms de médicaments : noms commerciaux (« Doliprane », « Kardegic »)
+et substances actives (« paracétamol », « apixaban »). Ils ne sont pas signalés comme mots inconnus
+et sont proposés pendant la saisie d'un remplacement. Interrupteur « Reconnaître les noms de
+médicaments » dans « Mise en forme ».
+
+Source : [Base de données publique des médicaments](https://base-donnees-publique.medicaments.gouv.fr)
+(ANSM), mise à jour du 29/09/2026. La liste est livrée avec l'add-on et mise à jour à chaque version ;
+elle ne contient que les médicaments autorisés, sans l'homéopathie. Un nom de médicament correct
+pour l'outil peut masquer une faute qui tombe sur un autre nom : relisez les posologies.
 
 ## Confidentialité
 

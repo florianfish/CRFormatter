@@ -4,6 +4,7 @@
 #   make docker    même chose dans le conteneur de l'add-on (Hunspell inclus)
 #   make test      tests (make test-docker : dans le conteneur, avec Hunspell)
 #   make exemple   génère dev-data/exemples/exemple.{docx,html}, un compte rendu mal formaté à copier-coller
+#   make medicaments  met à jour la liste des médicaments (base publique ANSM, téléchargée)
 #   make e2e       parcours de la secrétaire dans Chrome (lance un conteneur jetable)
 #
 # Variables : PORT=8099  DEV_USER=dev
@@ -16,7 +17,7 @@ IMAGE := docformatter:dev
 
 export PORT DEV_USER
 
-.PHONY: install run docker docker-down test test-docker exemple e2e clean
+.PHONY: install run docker docker-down test test-docker exemple medicaments e2e clean
 
 $(VENV)/.installe: docformatter/requirements.txt
 	python3 -m venv $(VENV)
@@ -51,6 +52,9 @@ test-docker:
 
 exemple: install
 	$(PY) scripts/exemple.py dev-data/exemples/exemple.docx
+
+medicaments: install
+	$(PY) scripts/medicaments.py docformatter/defaults/medicaments.txt
 
 e2e: exemple
 	@$(PY) -c "import playwright" 2>/dev/null || $(VENV)/bin/pip install -q playwright

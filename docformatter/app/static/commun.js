@@ -54,3 +54,31 @@ function notifier(texte, { type = "succes", annulation = null, apresAnnulation =
   zone.hidden = false;
   zone._delai = setTimeout(() => { zone.hidden = true; }, annulation ? 10000 : 5000);
 }
+
+/**
+ * Champ « Remplacer par » : au fil de la frappe, sa liste de suggestions (<datalist>) est complétée
+ * par le vocabulaire et les noms de médicaments (« dolip » → « Doliprane »). Les suggestions
+ * d'origine (orthographe) restent en tête.
+ */
+function proposerPendantLaFrappe(champ) {
+  let liste = champ.list;
+  if (!liste) {
+    liste = el("datalist", { id: `propositions-${Math.random().toString(36).slice(2)}` });
+    champ.after(liste);
+    champ.setAttribute("list", liste.id);
+  }
+  const initiales = [...liste.options].map((o) => o.value);
+  const remplir = (valeurs) => liste.replaceChildren(...[...new Set(valeurs)].map((v) => el("option", { value: v })));
+  let delai;
+  champ.addEventListener("input", () => {
+    clearTimeout(delai);
+    const saisie = champ.value.trim();
+    if (saisie.length < 2) { remplir(initiales); return; }
+    delai = setTimeout(async () => {
+      try {
+        const r = await api("GET", `api/proposer?q=${encodeURIComponent(saisie)}`);
+        if (champ.value.trim() === saisie) remplir([...initiales, ...r.propositions]);
+      } catch { /* sans propositions : le champ reste utilisable */ }
+    }, 150);
+  });
+}

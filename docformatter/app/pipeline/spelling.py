@@ -6,6 +6,7 @@ automatique fausse (molécule, posologie) est plus dangereuse qu'une faute.
 
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 import shutil
@@ -19,6 +20,7 @@ from .model import Inconnu
 log = logging.getLogger("docformatter")
 
 NB_SUGGESTIONS = 5
+RESSEMBLANCE_MIN = 0.8  # suggestions tirées des mots ajoutés (vocabulaire, médicaments)
 
 
 def _a_ignorer(mot: str, dictionnaire: set[str]) -> bool:
@@ -43,7 +45,13 @@ class Correcteur:
     def __init__(self, mots_supplementaires: Iterable[str], langue: str = "fr_FR"):
         self.langue = langue
         self.binaire = shutil.which("hunspell")
+        mots_supplementaires = list(mots_supplementaires)
         self.dictionnaire = {m.lower() for m in mots_supplementaires}
+        # Hunspell accepte les mots du dictionnaire personnel mais ne les suggère guère :
+        # les suggestions proches parmi ces mots sont calculées ici (« dolipranne » → « Doliprane »).
+        self._par_minuscules: dict[str, str] = {}
+        for m in mots_supplementaires:
+            self._par_minuscules.setdefault(m.lower(), m)
         # Dictionnaire personnel Hunspell : les mots ajoutés servent aussi aux suggestions.
         self._perso = tempfile.NamedTemporaryFile(
             "w", suffix=".dic", prefix="docformatter-", encoding="utf-8", delete=False
@@ -99,6 +107,8 @@ class Correcteur:
             if _a_ignorer(mot, self.dictionnaire):
                 continue
             sugg = [s.strip() for s in suggestions.split(",") if s.strip()] if ligne[0] == "&" else []
+            proches = difflib.get_close_matches(mot.lower(), self._par_minuscules, n=3, cutoff=RESSEMBLANCE_MIN)
+            sugg = list(dict.fromkeys([self._par_minuscules[p] for p in proches] + sugg))
             inconnus.append(Inconnu(debut, curseur, mot, sugg[:NB_SUGGESTIONS]))
         return inconnus
 

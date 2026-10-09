@@ -26,6 +26,7 @@ Pour publier une nouvelle version : incrémenter `version` dans `docformatter/co
 | `make docker` | Même chose dans le conteneur de l'add-on (Hunspell inclus, code monté) |
 | `make test` | Tests (`make test-docker` : dans le conteneur, avec l'orthographe) |
 | `make exemple` | Génère `dev-data/exemples/exemple.docx` (à ouvrir dans Word pour copier le texte) et `exemple.html` (presse-papiers Word, pour `make e2e`) |
+| `make medicaments` | Met à jour `docformatter/defaults/medicaments.txt` depuis la base publique des médicaments (ANSM) |
 | `make e2e` | Parcours complet de la secrétaire dans Chrome (formatage, vocabulaire, retouche…) |
 
 `make run` crée le `.venv` au premier lancement. Sans Hunspell sur la machine
@@ -60,6 +61,7 @@ docformatter/
     ├── rules.py          modèle des règles (validation pydantic), lecture/écriture YAML
     ├── store.py          stockage des règles : historique, annulation, réparation d'un fichier invalide
     ├── vocabulaire.py    opérations simples de la secrétaire (mots, remplacements, rubriques…)
+    ├── medicaments.py    noms de médicaments (defaults/medicaments.txt) : orthographe, propositions
     ├── collage.py        texte collé depuis Word (lu par static/collage.js) → .docx traité
     ├── retouche.py       éditeur de retouche : format échangé, conversion vers les blocs
     ├── web.py            FastAPI : collage, vocabulaire, mise en forme, historique, mode expert

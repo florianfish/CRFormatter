@@ -1,3 +1,11 @@
+## 0.8.0
+
+- **Noms de médicaments** (base publique de l'ANSM, mise à jour du 29/09/2026) : environ 6 000 noms
+  commerciaux et substances actives reconnus par l'orthographe, et proposés pendant la frappe
+  dans les champs « écrire » / « Remplacer par » (« dolip » → « Doliprane »). Interrupteur dans
+  « Mise en forme ».
+- Suggestions d'orthographe tirées aussi du vocabulaire et des médicaments (« dolipranne » → « Doliprane »).
+
 ## 0.7.0
 
 - **Copier-coller uniquement** : le dépôt de fichiers .docx et le dossier surveillé (option
